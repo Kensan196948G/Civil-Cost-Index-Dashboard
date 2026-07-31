@@ -1,0 +1,38 @@
+{
+  "name": "@cci/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build:worker": "wrangler deploy --dry-run --outdir dist",
+    "build:node": "esbuild src/server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist-node/server.mjs",
+    "build": "npm run build:node && npm run build:worker",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:smoke": "vitest run tests/smoke.test.ts",
+    "start": "node dist-node/server.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed": "node scripts/seed.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.12",
+    "@neondatabase/serverless": "^0.10.4",
+    "hono": "^4.7.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "@eslint/js": "^9.22.0",
+    "@types/node": "^22.15.0",
+    "esbuild": "^0.25.12",
+    "eslint": "^10.8.0",
+    "pg": "^8.13.1",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.26.0",
+    "vitest": "^3.0.8",
+    "wrangler": "^4.7.0"
+  }
+}

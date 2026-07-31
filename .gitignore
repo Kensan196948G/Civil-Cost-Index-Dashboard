@@ -1,0 +1,42 @@
+# env / secrets
+.env
+.env.*
+!.env.example
+*.dev.vars
+.dev.vars
+infra/neon/*.local
+*.pem
+*.key
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+data/*.db
+data/raw/*
+data/processed/*
+data/exports/*
+!data/samples/
+
+# node
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+
+# misc
+.DS_Store
+.idea/
+.vscode/
+*.log
+.wrangler/
+
+# wrangler local secrets
+.dev.vars

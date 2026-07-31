@@ -1,0 +1,31 @@
+import type { NextConfig } from "next";
+import path from "node:path";
+
+const staticExport = process.env.NEXT_STATIC_EXPORT === "1";
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+const nextConfig: NextConfig = {
+  output: staticExport ? "export" : "standalone",
+  outputFileTracingRoot: path.join(__dirname, "../.."),
+  trailingSlash: true,
+  images: { unoptimized: true },
+  reactStrictMode: true,
+  experimental: { cpus: 1 },
+  webpack: (config) => {
+    // wasm ベースのハッシュ関数がこの環境で確保に失敗するため JS 実装へ切替
+    config.output.hashFunction = "md4";
+    return config;
+  },
+  async rewrites() {
+    // 同一オリジン /api をローカルAPIへプロキシ（NEXT_PUBLIC_API_BASE_URL 未設定時）
+    if (apiBase) return [];
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000"}/api/:path*`,
+      },
+    ];
+  },
+};
+
+export default nextConfig;

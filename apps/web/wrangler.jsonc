@@ -1,0 +1,20 @@
+{
+  "name": "cci-web-assets",
+  "main": "src/assets-worker.ts",
+  "compatibility_date": "2026-07-31",
+  "assets": {
+    "directory": "./out",
+    "binding": "ASSETS",
+    "html_handling": "force-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    }
+  }
+}

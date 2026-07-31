@@ -1,0 +1,8 @@
+{
+  "project_id": "hidden-pond-85970897",
+  "name": "civil-cost-index-dashboard",
+  "region": "aws-ap-southeast-1",
+  "database": "neondb",
+  "role": "neondb_owner",
+  "created_at": "2026-07-31T22:38:09+09:00"
+}

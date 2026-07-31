@@ -1,0 +1,29 @@
+[Unit]
+Description=Civil Cost Index Dashboard API (Hono)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=kensan
+Group=kensan
+WorkingDirectory=/opt/cci/api
+EnvironmentFile=/etc/cci/cci.env
+Environment=PORT=8000
+Environment=API_HOST=0.0.0.0
+ExecStart=/usr/bin/node dist-node/server.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+# セキュリティ強化
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

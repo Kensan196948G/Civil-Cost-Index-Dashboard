@@ -31,8 +31,9 @@ export default function FilterPanel({
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         <div>
-          <label className={labelCls}>データ分類</label>
+          <label htmlFor="fp-data-type" className={labelCls}>データ分類</label>
           <select
+            id="fp-data-type"
             className={inputCls}
             value={values.dataType}
             onChange={(e) => onChange({ dataType: e.target.value as DataCategory, itemIds: [] })}
@@ -45,8 +46,9 @@ export default function FilterPanel({
           </select>
         </div>
         <div>
-          <label className={labelCls}>品目（複数選択可）</label>
+          <label htmlFor="fp-items" className={labelCls}>品目（複数選択可）</label>
           <select
+            id="fp-items"
             className={inputCls}
             multiple
             size={3}
@@ -61,8 +63,9 @@ export default function FilterPanel({
           </select>
         </div>
         <div>
-          <label className={labelCls}>地域（複数選択可）</label>
+          <label htmlFor="fp-regions" className={labelCls}>地域（複数選択可）</label>
           <select
+            id="fp-regions"
             className={inputCls}
             multiple
             size={3}
@@ -78,8 +81,9 @@ export default function FilterPanel({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className={labelCls}>開始</label>
+            <label htmlFor="fp-start" className={labelCls}>開始</label>
             <input
+              id="fp-start"
               type="month"
               className={inputCls}
               value={values.startPeriod}
@@ -87,14 +91,15 @@ export default function FilterPanel({
             />
           </div>
           <div>
-            <label className={labelCls}>終了</label>
-            <input type="month" className={inputCls} value={values.endPeriod} onChange={(e) => onChange({ endPeriod: e.target.value })} />
+            <label htmlFor="fp-end" className={labelCls}>終了</label>
+            <input id="fp-end" type="month" className={inputCls} value={values.endPeriod} onChange={(e) => onChange({ endPeriod: e.target.value })} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className={labelCls}>基準年月</label>
+            <label htmlFor="fp-base" className={labelCls}>基準年月</label>
             <input
+              id="fp-base"
               type="month"
               className={inputCls}
               value={values.basePeriod}
@@ -103,8 +108,8 @@ export default function FilterPanel({
             />
           </div>
           <div>
-            <label className={labelCls}>グラフ</label>
-            <select className={inputCls} value={values.chartType} onChange={(e) => onChange({ chartType: e.target.value as "line" | "bar" })}>
+            <label htmlFor="fp-chart" className={labelCls}>グラフ</label>
+            <select id="fp-chart" className={inputCls} value={values.chartType} onChange={(e) => onChange({ chartType: e.target.value as "line" | "bar" })}>
               <option value="line">折れ線</option>
               <option value="bar">棒</option>
             </select>

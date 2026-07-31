@@ -21,7 +21,18 @@ export default tseslint.config(
         TextDecoder: "readonly",
         TextEncoder: "readonly",
         btoa: "readonly",
+        File: "readonly",
+        FormData: "readonly",
+        Blob: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        fetch: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
       },
+    },
+    rules: {
+      "no-empty": ["error", { "allowEmptyCatch": true }],
     },
   }
 );

@@ -5,11 +5,12 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/", "node_modules/", "coverage/"],
+    ignores: ["dist/", "dist-node/", "node_modules/", "coverage/", ".wrangler/"],
   },
   {
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+      "no-empty": ["error", { "allowEmptyCatch": true }],
     },
     languageOptions: {
       globals: {
@@ -30,9 +31,6 @@ export default tseslint.config(
         setTimeout: "readonly",
         clearTimeout: "readonly",
       },
-    },
-    rules: {
-      "no-empty": ["error", { "allowEmptyCatch": true }],
     },
   }
 );

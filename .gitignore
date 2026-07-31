@@ -28,6 +28,7 @@ node_modules/
 .next/
 out/
 dist/
+dist-node/
 coverage/
 *.tsbuildinfo
 

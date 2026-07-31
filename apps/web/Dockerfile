@@ -1,12 +1,14 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN corepack enable
+ENV PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
 FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
 RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

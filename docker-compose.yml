@@ -1,36 +1,38 @@
 services:
   api:
-    # Cloudflare Worker API (Hono + Neon PostgreSQL) - local dev via wrangler
-    image: node:22-alpine
-    working_dir: /app/apps/api
-    command: sh -c "npm install --no-audit --no-fund && npx wrangler dev --port 8787 --ip 0.0.0.0"
+    build:
+      context: ./apps/api
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8787}
-    env_file:
-      - ./apps/api/.dev.vars
+      APP_ENV: ${APP_ENV:-production}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      PORT: 8000
+      API_HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
-      - "8787:8787"
-    volumes:
-      - .:/app
+      - "${CCI_API_HOST_PORT:-8000}:8000"
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 20s
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
       timeout: 5s
       retries: 10
 
   web:
-    # Next.js static-export frontend - local dev
-    image: node:22-alpine
-    working_dir: /app/apps/web
-    command: sh -c "npm install --no-audit --no-fund && npm run dev"
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        API_PROXY_TARGET: ${API_PROXY_TARGET:-http://api:8000}
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8787}
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app
+    restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
-
-volumes: {}
+        condition: service_healthy

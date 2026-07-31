@@ -51,5 +51,15 @@
 
 ## 5. 承認済み CI/CD 経路
 
+## 5.1 本機（LAN）運用（現在の本番）
+
+利用者指示により、当面は本機の自動割当IP＋ポートで稼働する（systemd 常駐）。
+
+- 構成: Docker Compose（`cci-api` / `cci-web`）+ systemd `cci.service`（起動時自動起動）
+- Web: `http://<自動割当IP>:3000` / API 直接: `http://<自動割当IP>:18000`
+- DB: Neon（`civil-cost-index-dashboard`、ap-southeast-1）を正本として接続
+- 環境ファイル: `/etc/cci/cci.env`（root のみ読取可）
+- Cloudflare Workers（`cci-api-production` / `cci-web-assets`）は一時プレビューとして維持
+
 - GitHub Actions `Deploy`（`.github/workflows/deploy.yml`）: main push 時に API・Web をデプロイ
 - デプロイトークン: `CLOUDFLARE_API_TOKEN`（GitHub Secret）

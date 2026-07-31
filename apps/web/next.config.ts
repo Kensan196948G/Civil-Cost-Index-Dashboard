@@ -1,13 +1,10 @@
 import type { NextConfig } from "next";
-import path from "node:path";
-
 const staticExport = process.env.NEXT_STATIC_EXPORT === "1";
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 const nextConfig: NextConfig = {
   output: staticExport ? "export" : "standalone",
-  outputFileTracingRoot: path.join(__dirname, "../.."),
-  trailingSlash: true,
+  trailingSlash: staticExport ? true : false,
   images: { unoptimized: true },
   reactStrictMode: true,
   experimental: { cpus: 1 },

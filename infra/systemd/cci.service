@@ -1,0 +1,18 @@
+[Unit]
+Description=Civil Cost Index Dashboard (Docker Compose: api + web)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+WorkingDirectory=/opt/cci
+EnvironmentFile=/etc/cci/cci.env
+ExecStart=/usr/bin/docker compose -p cci -f /opt/cci/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -p cci -f /opt/cci/docker-compose.yml down
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

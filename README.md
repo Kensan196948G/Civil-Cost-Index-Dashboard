@@ -17,7 +17,19 @@
 - 過年度比較・地域差比較
 - 社内説明資料・発注者向け資料の作成
 
-## 🌐 本番稼働 URL（2026-07-31 初回リリース）
+## 🌐 稼働 URL（2026-08-01 現在）
+
+### 🖥️ 本機（LAN）運用【本番・利用者指示】
+
+| 対象 | URL | 備考 |
+| --- | --- | --- |
+| Web UI | <http://192.168.0.185:3000> | 自動割当IP + ポート3000 |
+| API（直接） | <http://192.168.0.185:18000> | ポート8000は他サービス使用中のため18000 |
+| API（Web経由） | `http://192.168.0.185:3000/api/*` | 同一オリジンプロキシ（CORS不要） |
+
+systemd ユニット `cci.service` を登録済み（起動時自動起動）。Docker Compose で api/web を常駐させています。
+
+### ☁️ Cloudflare Workers（一時プレビュー）
 
 | 対象 | URL | 備考 |
 | --- | --- | --- |
@@ -26,7 +38,7 @@
 | API ヘルスチェック | <https://cci-api-production.kensan1969.workers.dev/api/health/ready> | DB接続含む死活確認 |
 | DB（正本） | Neon PostgreSQL（ap-southeast-1） | 接続情報は Cloudflare Secret で管理 |
 
-> **カスタムドメイン候補（未設定・DNS変更なし）**:
+> **カスタムドメイン候補（未設定・DNS変更なし・サブドメインは後日決定）**:
 > `cci.mirai-dx-platform.com` / `civil-cost-index.mirai-dx-platform.com` / `costindex.mirai-dx-platform.com`
 > 採用サブドメインが決まり次第、Cloudflare DNS（CNAME → `cci-web-assets.kensan1969.workers.dev` 等）を設定します。
 
@@ -49,12 +61,12 @@
 
 ```mermaid
 flowchart LR
-    U[利用者ブラウザ] -->|HTTPS| W[Cloudflare Workers 静的アセット<br/>Next.js static export]
-    W -->|HTTPS /api| A[Hono API Worker]
+    U1[LAN利用者] -->|http://IP:3000| W1[Next.js standalone<br/>Docker + systemd]
+    U2[インターネット] -->|https| W2[Workers 静的アセット<br/>一時プレビュー]
+    W1 -->|同一オリジン /api| A[Hono API<br/>Docker / Worker 共通コード]
+    W2 -->|https /api| A
     A --> DB[(Neon PostgreSQL<br/>業務データ正本)]
-    A -. マイグレーション/シード .-> DB
     ADMIN[管理者] -->|X-Admin-Key| A
-    U -->|X-Admin-Key| W
 ```
 
 ### データフロー

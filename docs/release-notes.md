@@ -35,3 +35,11 @@
 - API: typecheck / lint / 単体テスト 17件 / 統合スモーク 13件 / ビルド dry-run 成功
 - Web: typecheck / lint / テスト 4件 / 静的ビルド成功
 - 本番: 全エンドポイント 200 / 管理API 401・409 検証済み / セキュリティヘッダー確認済み
+
+## v0.1.0（2026-08-01 追記: 本番運用開始）
+
+- 利用者指示に基づき、本機（自動割当IP）の Web:3000 / API:18000 で本番稼働開始
+- systemd `cci.service` を登録し、機器起動時の自動起動を有効化
+- Docker Compose（api/web イメージ）での常駐構成を追加
+- Cloudflare Workers（`cci-api-production` / `cci-web-assets`）は一時プレビューとして維持
+- サブドメインは後日決定（DNS変更なし）

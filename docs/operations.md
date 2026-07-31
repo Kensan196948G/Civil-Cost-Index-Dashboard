@@ -34,6 +34,26 @@ NEXT_STATIC_EXPORT=1 NEXT_PUBLIC_API_BASE_URL=https://cci-api-production.kensan1
 wrangler deploy
 ```
 
+> 注: Cloudflare へのデプロイは現在 **手動実行**（GitHub Actions `Deploy Cloudflare (manual)`）とし、
+> 本番は下記の本機（LAN）運用を主としています。
+
+## 3.1 本機（LAN）運用（現在の本番）
+
+利用者指示により、本機の自動割当IP＋ポートで稼働する（systemd 常駐）。
+
+```bash
+# 初回インストール
+sudo CCI_API_HOST_PORT=18000 bash infra/systemd/install.sh
+# 起動・状態
+sudo systemctl start cci
+sudo systemctl status cci
+sudo docker compose -p cci -f /opt/cci/docker-compose.yml ps
+```
+
+- Web: `http://<自動割当IP>:3000`（例: http://192.168.0.185:3000）
+- API 直接: `http://<自動割当IP>:18000`
+- 再起動後の自動起動: `systemctl is-enabled cci` → `enabled`
+
 ## 4. ログ確認
 
 ```bash

@@ -19,16 +19,42 @@ if ! docker compose -f "$REPO_ROOT/docker-compose.yml" build; then
   exit 1
 fi
 
-echo "==> 構成ファイルを配置"
-cp "$REPO_ROOT/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
-if [ "$API_HOST_PORT" != "8000" ]; then
-  cat > "$INSTALL_DIR/docker-compose.override.yml" <<EOF
+echo "==> 構成ファイルを配置（イメージ参照型）"
+cat > "$INSTALL_DIR/docker-compose.yml" <<EOF
 services:
   api:
+    image: civil-cost-index-dashboard-api:latest
+    environment:
+      APP_ENV: \${APP_ENV:-production}
+      APP_VERSION: \${APP_VERSION:-0.1.0}
+      PORT: 8000
+      API_HOST: 0.0.0.0
+      DATABASE_URL: \${DATABASE_URL:-}
+      ADMIN_API_KEY: \${ADMIN_API_KEY:-}
+      BASIC_AUTH_USERNAME: \${BASIC_AUTH_USERNAME:-}
+      BASIC_AUTH_PASSWORD: \${BASIC_AUTH_PASSWORD:-}
+      CORS_ORIGINS: \${CORS_ORIGINS:-http://localhost:3000}
     ports:
       - "${API_HOST_PORT}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: civil-cost-index-dashboard-web:latest
+    environment:
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
 EOF
-fi
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> 環境ファイル新規作成: $ENV_FILE（手動編集してください）"
@@ -44,6 +70,7 @@ BASIC_AUTH_PASSWORD=
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 NEXT_PUBLIC_API_BASE_URL=
 API_PROXY_TARGET=http://api:8000
+CCI_API_HOST_PORT=${API_HOST_PORT}
 EOF
   chmod 600 "$ENV_FILE"
   echo "!! $ENV_FILE を編集して本番接続情報を設定してください"

@@ -41,18 +41,18 @@
 | --- | --- |
 | ドメイン | `ccid.mirai-dx-platform.com`（ゾーン: `mirai-dx-platform.com`） |
 | 用途 | Web UI（cci-web-assets 静的アセット） |
-| DNS | AAAA `100::`（proxied）※ Workers カスタムドメイン用のプレースホルダ |
-| Worker カスタムドメイン | `cci-web-assets`（zone_id: `e375e651e49a40801a305b89e297bff0`） |
+| DNS | AAAA `100::`（proxied）※ 作成済み（2026-08-01、カスタムドメインアタッチ時に自動生成） |
+| Worker カスタムドメイン | `cci-web-assets`（zone_id: `e375e651e49a40801a305b89e297bff0`、domain_id: `a99f2d3f14a8d2085cb2de974415317538380080`） |
 | 設定経路 | GitHub Actions `Deploy Cloudflare (manual)` の `configure-domain` ジョブ（冪等） |
 | CORS | API Worker の `CORS_ORIGINS` に `https://ccid.mirai-dx-platform.com` を追加済み |
-| Access | **適用済み（2026-08-01、利用者側で設定）**。アプリ名 `ccid`（self_hosted）、ポリシーID `5a9f0252-85a4-490e-8814-5752bb4559f8`、Allow: メールドメイン `mirai-const.co.jp` / メール `kensan1969@gmail.com` |
+| Access | **適用済み・動作確認済み（2026-08-01）**。アプリ名 `ccid`（self_hosted）、ポリシーID `5a9f0252-85a4-490e-8814-5752bb4559f8`、Allow: メールドメイン `mirai-const.co.jp` / メール `kensan1969@gmail.com`。未認証アクセスは <https://winter-lake-f4c9.cloudflareaccess.com> のログインへ302 |
 
 API 用サブドメイン（例: `api.ccid.mirai-dx-platform.com`）は未設定（現状は
 `cci-api-production.kensan1969.workers.dev` を使用）。
 
-> **注意（2026-08-01 時点）**: Access アプリは作成済みだが、**DNS レコード（AAAA 100::）と
-> Workers カスタムドメイン（cci-web-assets）は未作成**のため、`ccid.mirai-dx-platform.com` は
-> まだインターネット上に公開されていない。DNS 追加後に Access が有効化される。
+> **検証（2026-08-01）**: `curl https://ccid.mirai-dx-platform.com/` は HTTP 302 で
+> Cloudflare Access ログインへリダイレクト（`aud=372d61...` が ccid アプリと一致）。
+> 認証後は cci-web-assets（standalone HTML）が表示される。
 
 ## 5. 承認済み CI/CD 経路
 

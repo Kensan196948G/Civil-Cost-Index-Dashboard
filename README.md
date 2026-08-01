@@ -46,8 +46,8 @@ systemd ユニット `cci.service` を登録済み（起動時自動起動）。
 > **カスタムドメイン**: `ccid.mirai-dx-platform.com`（2026-08-01 決定・設定済み）。
 > DNS（AAAA 100::）と Workers カスタムドメイン（cci-web-assets）を GitHub Actions の
 > `Deploy Cloudflare (manual)` で冪等に管理します。アクセス制限（Cloudflare Access）は
-> 適用済み（ポリシーID `5a9f0252-85a4-490e-8814-5752bb4559f8`、mirai-const.co.jp メール限定）。
-> ※ DNS レコード未追加のため、公開まであと1操作が必要。
+> 適用・動作確認済み（ポリシーID `5a9f0252-85a4-490e-8814-5752bb4559f8`、mirai-const.co.jp メール限定）。
+> 未認証アクセスは Cloudflare Access のログインへリダイレクトされます。
 
 ## ✨ 主な機能
 

@@ -38,13 +38,14 @@ systemd ユニット `cci.service` を登録済み（起動時自動起動）。
 | 対象 | URL | 備考 |
 | --- | --- | --- |
 | Web（フロントエンド） | <https://cci-web-assets.kensan1969.workers.dev> | Cloudflare Workers 静的アセット |
+| Web（本番ドメイン） | <https://ccid.mirai-dx-platform.com> | 2026-08-01 設定。Cloudflare Access 適用予定（利用者側） |
 | API（バックエンド） | <https://cci-api-production.kensan1969.workers.dev> | Cloudflare Worker（Hono + Neon） |
 | API ヘルスチェック | <https://cci-api-production.kensan1969.workers.dev/api/health/ready> | DB接続含む死活確認 |
 | DB（正本） | Neon PostgreSQL（ap-southeast-1） | 接続情報は Cloudflare Secret で管理 |
 
-> **カスタムドメイン候補（未設定・DNS変更なし・サブドメインは後日決定）**:
-> `cci.mirai-dx-platform.com` / `civil-cost-index.mirai-dx-platform.com` / `costindex.mirai-dx-platform.com`
-> 採用サブドメインが決まり次第、Cloudflare DNS（CNAME → `cci-web-assets.kensan1969.workers.dev` 等）を設定します。
+> **カスタムドメイン**: `ccid.mirai-dx-platform.com`（2026-08-01 決定・設定済み）。
+> DNS（AAAA 100::）と Workers カスタムドメイン（cci-web-assets）を GitHub Actions の
+> `Deploy Cloudflare (manual)` で冪等に管理します。アクセス制限（Cloudflare Access）は利用者側で適用予定。
 
 ## ✨ 主な機能
 

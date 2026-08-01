@@ -7,7 +7,7 @@
 | Cloudflare アカウント | Kensan1969@gmail.com's Account |
 | ゾーン | `mirai-dx-platform.com`（Free plan, full setup） |
 | API Worker | `cci-api-production` → <https://cci-api-production.kensan1969.workers.dev> |
-| Web Worker（静的アセット） | `cci-web-assets` → <https://cci-web-assets.kensan1969.workers.dev> |
+| Web Worker（静的アセット） | `cci-web-assets` → <https://cci-web-assets.kensan1969.workers.dev> / <https://ccid.mirai-dx-platform.com> |
 | Neon プロジェクト | `civil-cost-index-dashboard`（id: hidden-pond-85970897, region: aws-ap-southeast-1, PG17） |
 | Neon DB | `neondb`（role: neondb_owner） |
 | Workers サブドメイン | `kensan1969.workers.dev` |
@@ -35,19 +35,20 @@
 - シード: `npm run db:seed`（SHA-256 ハッシュで冪等）
 - テーブル: regions / items / data_sources / time_series_values / source_files / transform_logs
 
-## 4. カスタムドメイン（未設定・要決定）
+## 4. カスタムドメイン（2026-08-01 決定・設定済み）
 
-対象サブドメインは既存設定・設計書・環境変数から特定できなかったため、候補を文書化する。
-**DNS変更は未実施。**
+| 項目 | 値 |
+| --- | --- |
+| ドメイン | `ccid.mirai-dx-platform.com`（ゾーン: `mirai-dx-platform.com`） |
+| 用途 | Web UI（cci-web-assets 静的アセット） |
+| DNS | AAAA `100::`（proxied）※ Workers カスタムドメイン用のプレースホルダ |
+| Worker カスタムドメイン | `cci-web-assets`（zone_id: `e375e651e49a40801a305b89e297bff0`） |
+| 設定経路 | GitHub Actions `Deploy Cloudflare (manual)` の `configure-domain` ジョブ（冪等） |
+| CORS | API Worker の `CORS_ORIGINS` に `https://ccid.mirai-dx-platform.com` を追加済み |
+| Access | **適用予定（利用者側で実施）**。適用前は一般公開のため注意 |
 
-| 候補 | 用途 | 接続先（想定） |
-| --- | --- | --- |
-| `cci.mirai-dx-platform.com` | Web | CNAME → `cci-web-assets.kensan1969.workers.dev` |
-| `civil-cost-index.mirai-dx-platform.com` | Web | 同上 |
-| `costindex.mirai-dx-platform.com` | Web | 同上 |
-| `api.cci.mirai-dx-platform.com` | API（任意） | Workers ルートパターン |
-
-決定後: DNS レコード追加 → Workers カスタムドメイン（またはルート）→ Cloudflare Access 適用 → CORS_ORIGINS 更新。
+API 用サブドメイン（例: `api.ccid.mirai-dx-platform.com`）は未設定（現状は
+`cci-api-production.kensan1969.workers.dev` を使用）。
 
 ## 5. 承認済み CI/CD 経路
 

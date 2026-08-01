@@ -19,6 +19,6 @@
   },
   "vars": {
     "APP_VERSION": "0.1.0",
-    "CORS_ORIGINS": "http://localhost:3000,http://localhost:8787,https://cci-web-assets.kensan1969.workers.dev"
+    "CORS_ORIGINS": "http://localhost:3000,http://localhost:8787,https://cci-web-assets.kensan1969.workers.dev,https://ccid.mirai-dx-platform.com"
   }
 }

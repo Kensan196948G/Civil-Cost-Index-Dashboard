@@ -2,6 +2,14 @@
 
 ## Unreleased（作業ブランチ: 公式データソース取込対応）
 
+## Unreleased（2026-08-01: ccid ドメイン設定）
+
+- サブドメインを `ccid.mirai-dx-platform.com` に決定
+- Workers カスタムドメイン（cci-web-assets）＋DNS（AAAA 100::）を GitHub Actions の `Deploy Cloudflare (manual)` で冪等管理（configure-domain ジョブ）
+- API Worker の CORS_ORIGINS に ccid ドメインを追加
+- ルート「/」を standalone HTML へサーバー内 rewrite（LAN Docker 運用向け・リダイレクトなし）
+- Cloudflare Access は利用者側で適用予定（適用前は一般公開）
+
 ### 追加
 
 - データソース管理に公式データソース4件を登録（e-Stat 主要建設資材需給・価格動向調査 / e-Stat 消費者物価指数 / けんせつPlaza / 公共工事設計労務単価）

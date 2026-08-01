@@ -13,10 +13,12 @@
 curl https://cci-api-production.kensan1969.workers.dev/api/health/live
 curl https://cci-api-production.kensan1969.workers.dev/api/health/ready
 curl -o /dev/null -s -w '%{http_code}\n' https://cci-web-assets.kensan1969.workers.dev/
+curl -o /dev/null -s -w '%{http_code}\n' https://ccid.mirai-dx-platform.com/
 ```
 
 - live: Worker 稼働
 - ready: DB 接続（`SELECT 1`）まで確認
+- ccid: Web 本番ドメイン（Cloudflare Access 適用前は誰でも閲覧可能）
 
 ## 3. デプロイ
 

@@ -45,6 +45,10 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
           NEXT_STATIC_EXPORT: "1"
+      - name: Apply standalone root
+        run: node ../../scripts/apply-standalone.mjs
+        env:
+          NEXT_STATIC_EXPORT: "1"
       - name: Deploy Worker assets
         run: npx wrangler deploy
         env:

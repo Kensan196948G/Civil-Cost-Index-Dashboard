@@ -45,6 +45,7 @@ export default function FetchJobsPage() {
               <tr className="border-b border-gray-200 text-left text-xs text-gray-600">
                 <th className="py-2">開始</th>
                 <th>データソース</th>
+                <th>種別</th>
                 <th>ファイル</th>
                 <th>状態</th>
                 <th>成功/エラー</th>
@@ -56,7 +57,17 @@ export default function FetchJobsPage() {
                 <tr key={j.id} className="border-b border-gray-100 align-top">
                   <td className="py-2 whitespace-nowrap text-xs">{formatDateTime(j.started_at)}</td>
                   <td className="py-2">{j.data_source_name}</td>
+                  <td className="py-2 text-xs">{j.job_type === "manual_fetch" ? "URL取得" : "手動取込"}</td>
                   <td className="py-2 font-mono text-xs">{j.file_name ?? "—"}</td>
+                  <td className="py-2 font-mono text-xs">
+                    {j.original_url ? (
+                      <a href={j.original_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                        取得元
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="py-2">
                     <span className={`rounded px-2 py-0.5 text-xs ${j.status === "success" ? "bg-green-100 text-green-700" : j.status === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
                       {STATUS_LABEL[j.status] ?? j.status}
@@ -85,7 +96,7 @@ export default function FetchJobsPage() {
               ))}
               {jobs.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-gray-500">
+                  <td colSpan={8} className="py-6 text-center text-gray-500">
                     取込履歴がありません
                   </td>
                 </tr>

@@ -34,6 +34,7 @@ export async function listFetchJobs(
     job_type: r.original_url ? "manual_fetch" : "manual_upload",
     status: r.status,
     file_name: r.file_name,
+    original_url: r.original_url,
     file_hash: r.file_hash ? `sha256:${r.file_hash}` : null,
     total_rows: r.total_rows,
     success_rows: r.success_rows,

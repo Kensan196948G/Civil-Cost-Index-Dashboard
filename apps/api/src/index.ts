@@ -17,6 +17,7 @@ import { buildTimeseries, fetchRawRows, rawRowsToSeries } from "./services/times
 import { listAlerts } from "./services/alerts";
 import { getDashboardSummary } from "./services/dashboard";
 import { listFetchJobs } from "./services/fetchJobs";
+import { fetchFromUrl } from "./services/fetchUrl";
 import { handleUpload } from "./services/uploads";
 import { buildCsvExport } from "./services/exportCsv";
 import { parsePeriod } from "./lib/stats";
@@ -62,6 +63,7 @@ async function handleError(c: AppContext, e: unknown) {
   if (status === 404) return fail(c, "NOT_FOUND", (e as Error).message, 404);
   if (status === 409) return fail(c, "CONFLICT", (e as Error).message, 409);
   if (status === 501) return fail(c, "NOT_IMPLEMENTED", (e as Error).message, 501);
+  if (status === 502) return fail(c, "BAD_GATEWAY", (e as Error).message, 502);
   console.error("internal_error", e);
   return fail(c, "INTERNAL_ERROR", "内部エラーが発生しました。", 500);
 }
@@ -283,6 +285,35 @@ app.get("/api/fetch-jobs", async (c) => {
   try {
     const sql = getSql(c.env);
     return ok(c, { fetch_jobs: await listFetchJobs(sql, { status: c.req.query("status"), limit: Math.floor(limit) }) });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/fetch-jobs", async (c) => {
+  if (!requireAdmin(c)) return fail(c, "UNAUTHORIZED", "管理者キーが必要です。", 401);
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return fail(c, "VALIDATION_ERROR", "JSONボディが必要です。", 400);
+  }
+  const parsed = z
+    .object({
+      data_source_id: z.string().min(1),
+      url: z.string().optional().nullable(),
+    })
+    .safeParse(body);
+  if (!parsed.success) {
+    return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
+  }
+  try {
+    const sql = getSql(c.env);
+    const result = await fetchFromUrl(sql, {
+      dataSourceId: parsed.data.data_source_id,
+      url: parsed.data.url ?? undefined,
+    }, c.env);
+    return ok(c, result, 201);
   } catch (e) {
     return handleError(c, e);
   }

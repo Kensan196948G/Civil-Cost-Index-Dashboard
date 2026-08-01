@@ -5,6 +5,8 @@ export type Env = {
   APP_VERSION: string;
   BASIC_AUTH_USERNAME?: string;
   BASIC_AUTH_PASSWORD?: string;
+  /** 任意: URL取込で許可するホスト（カンマ区切り）。未設定なら全パブリックホスト許可。 */
+  FETCH_ALLOWED_HOSTS?: string;
 };
 
 export type Region = {

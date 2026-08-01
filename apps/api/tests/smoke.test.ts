@@ -126,6 +126,18 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(res.body.error.code).toBe("UNAUTHORIZED");
   });
 
+  it("url fetch endpoint rejects private addresses (no network)", async () => {
+    const sourcesRes = await get("/api/data-sources");
+    const sampleSource = sourcesRes.body.data.data_sources.find((s: { source_code: string }) => s.source_code === "SAMPLE_MATERIAL");
+    const res = await get("/api/fetch-jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! },
+      body: JSON.stringify({ data_source_id: sampleSource.id, url: "http://127.0.0.1/x" }),
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("upload rejects duplicate file", async () => {
     const samplePath = path.resolve(__dirname, "..", "..", "..", "data", "samples", "sample_material_prices.csv");
     const content = readFileSync(samplePath);

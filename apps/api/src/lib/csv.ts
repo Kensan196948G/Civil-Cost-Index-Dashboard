@@ -1,4 +1,26 @@
+import * as XLSX from "xlsx";
+
 export type CsvRow = Record<string, string>;
+
+export function parseWorkbookRows(buffer: ArrayBuffer): CsvRow[] {
+  const wb = XLSX.read(buffer, { type: "buffer" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as unknown[][];
+  const headerIdx = aoa.findIndex((r) => r.some((c) => String(c).trim() !== ""));
+  if (headerIdx < 0) return [];
+  const headers = aoa[headerIdx].map((h, i) => String(h ?? "").trim() || `col${i + 1}`);
+  const rows: CsvRow[] = [];
+  for (let i = headerIdx + 1; i < aoa.length; i++) {
+    const line = aoa[i];
+    if (!line.some((c) => String(c).trim() !== "")) continue;
+    const row: CsvRow = {};
+    headers.forEach((h, idx) => {
+      row[h] = String(line[idx] ?? "").trim();
+    });
+    rows.push(row);
+  }
+  return rows;
+}
 
 export function parseCsv(text: string): CsvRow[] {
   const rows: CsvRow[] = [];

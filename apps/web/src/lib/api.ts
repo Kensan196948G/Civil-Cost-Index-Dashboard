@@ -6,6 +6,7 @@ import type {
   DashboardAlert,
   DashboardSummary,
   FetchJob,
+  FetchUrlInput,
   Item,
   Region,
   TimeseriesParams,
@@ -107,6 +108,12 @@ export const api = {
     }),
   fetchJobs: (params?: { status?: string; limit?: number }) =>
     request<{ fetch_jobs: FetchJob[] }>(`/api/fetch-jobs${buildQuery(params ?? {})}`),
+  fetchFromUrl: (input: FetchUrlInput, adminKey: string) =>
+    request<FetchJob>("/api/fetch-jobs", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+      body: JSON.stringify(input),
+    }),
   upload: (file: File, dataSourceId: string, adminKey: string) => {
     const fd = new FormData();
     fd.append("file", file);

@@ -55,9 +55,20 @@ systemd ユニット `cci.service` を登録済み（起動時自動起動）。
 | 🔄 比較分析 | 複数系列の比較・基準年月100指数化 | `/compare/` |
 | 📋 データテーブル | ソート・ページング・状態表示 | `/table/` |
 | 📤 レポート出力 | CSV出力（PDFは準備中） | `/export/` |
-| 🗂️ データソース管理 | 取得元の登録・無効化（管理API） | `/admin/data-sources/` |
-| 📥 取込履歴 | CSV取込・成功/失敗/エラー行の確認 | `/admin/fetch-jobs/` |
+| 🗂️ データソース管理 | 公式データソース登録・URL取得（CSV/Excel）・無効化 | `/admin/data-sources/` |
+| 📥 取込履歴 | CSV/Excel/URL取込の成功・失敗・エラー行確認 | `/admin/fetch-jobs/` |
 | ⚙️ ユーザー設定 | 初期地域・Admin Keyの保存 | `/settings/` |
+
+## 🗄️ データソース
+
+| コード | データソース | 種別 | 提供元 | 形式 | 更新頻度 | 取得方法 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ESTAT_MATERIAL_SUPPLY` | e-Stat 主要建設資材需給・価格動向調査 | 資材 | 経済産業省 | Excel | 月次 | URL取込（専用変換で全国平均値を指数化） |
+| `ESTAT_CPI` | e-Stat 消費者物価指数 | 指数 | 総務省統計局 | API | 月次 | e-Stat API（appId必須） |
+| `KENPLAZA_MATERIAL` | けんせつPlaza 主要建設資材価格 | 資材 | 経済調査会 | Web | 月次 | Web閲覧・手動取込 |
+| `MLIT_LABOR` | 公共工事設計労務単価 | 労務 | 国土交通省 | PDF/Excel | 年次 | 公表資料の手動取込 |
+
+取得手順・API仕様・マッピングは [データ取得手順書](docs/data-acquisition.md) を参照してください。
 
 ## 🏛️ アーキテクチャ
 
@@ -77,8 +88,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    SRC[公開データ<br/>CSV] --> UP[手動アップロード]
+    SRC[公開データ<br/>CSV / Excel / URL] --> UP[手動アップロード]
+    URL[公開URL] --> FETCH[URL取得<br/>SSRFガード付き]
+    FETCH --> CONV[専用変換<br/>e-Stat 表-2 等]
     UP --> HASH[SHA-256 重複判定]
+    CONV --> HASH
     HASH --> TR[変換・正規化<br/>年月/数値/地域/品目]
     TR --> MS[マスタ照合]
     MS --> UPSERT[UPSERT 登録]
@@ -96,7 +110,7 @@ flowchart LR
 | フロントエンド | Next.js 15 / React 19 / TypeScript | 画面・状態管理（静的エクスポート） |
 | UI | Tailwind CSS | スタイリング |
 | グラフ | Apache ECharts | 時系列・比較グラフ |
-| バックエンド | Hono (TypeScript) on Cloudflare Workers | API・集計・CSV取込・変換 |
+| バックエンド | Hono (TypeScript) on Cloudflare Workers | API・集計・CSV/Excel/URL取込・専用変換 |
 | DB | Neon PostgreSQL 17（本番正本） | マスタ・時系列・履歴 |
 | マイグレーション | SQL（`apps/api/migrations/`） | スキーマ管理 |
 | CI/CD | GitHub Actions + Wrangler | テスト・ビルド・デプロイ |

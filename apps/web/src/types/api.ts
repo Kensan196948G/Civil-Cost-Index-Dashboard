@@ -141,6 +141,7 @@ export interface FetchJob {
   job_type: string;
   status: string;
   file_name: string | null;
+  original_url: string | null;
   file_hash: string | null;
   total_rows: number | null;
   success_rows: number | null;
@@ -148,6 +149,11 @@ export interface FetchJob {
   error_detail: Array<{ row: number; column: string; reason: string }>;
   started_at: string;
   finished_at: string | null;
+}
+
+export interface FetchUrlInput {
+  data_source_id: string;
+  url?: string;
 }
 
 export interface TimeseriesParams {

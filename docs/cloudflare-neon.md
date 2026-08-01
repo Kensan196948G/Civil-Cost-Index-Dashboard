@@ -27,6 +27,9 @@
 - 静的アセット: `apps/web/out`（Next.js `output: export`, trailingSlash: true）
 - `html_handling: force-trailing-slash` / `not_found_handling: 404-page`
 - セキュリティヘッダー: `public/_headers`（CSP / X-Frame-Options / nosniff / Referrer-Policy / Permissions-Policy）
+  - standalone HTML（`/`・`/standalone.html`・`/index.html`）はバンドル仕様のため
+    `script-src 'unsafe-inline' 'unsafe-eval' blob: data:` 等に緩和（2026-08-01、Unpacking停止の修正）
+  - React 管理画面（/timeseries 等）と `/_next/*` は従来どおり厳格な CSP を維持
 
 ## 3. Neon 運用
 

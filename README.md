@@ -30,7 +30,7 @@
 systemd ユニット `cci.service` を登録済み（起動時自動起動）。Docker Compose で api/web を常駐させています。
 
 > **WebUI**: ルート直下の `Civil Cost Index Dashboard (standalone).html` を100%適用し、
-> `/` は `/standalone.html` へリダイレクトされます（デザイン・操作・レスポンシブは正本 HTML と同一）。
+> `/` でリダイレクトなしに直接表示します（デザイン・操作・レスポンシブは正本 HTML と同一）。
 > `/timeseries`・`/compare`・`/table`・`/admin/*` 等の API 連携画面も併設しています。
 
 ### ☁️ Cloudflare Workers（一時プレビュー）

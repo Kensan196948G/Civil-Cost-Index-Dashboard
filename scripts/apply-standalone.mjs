@@ -18,12 +18,7 @@ if (!existsSync(source)) {
 
 const outDir = join(root, "apps", "web", "out");
 if (process.env.NEXT_STATIC_EXPORT === "1" && existsSync(outDir)) {
-  mkdirSync(join(outDir, "standalone"), { recursive: true });
-  copyFileSync(publicTarget, join(outDir, "standalone", "index.html"));
-  writeFileSync(
-    join(outDir, "index.html"),
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/standalone/">' +
-      '<title>Civil Cost Index Dashboard</title></head><body><a href="/standalone/">Civil Cost Index Dashboard</a></body></html>'
-  );
-  console.log("[apply-standalone] static export root -> /standalone/");
+  // ルートを standalone HTML そのもので直接提供（リダイレクトなし）
+  copyFileSync(publicTarget, join(outDir, "index.html"));
+  console.log("[apply-standalone] static export root = standalone.html (redirect なし)");
 }

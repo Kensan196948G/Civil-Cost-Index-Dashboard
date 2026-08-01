@@ -69,8 +69,19 @@ cd apps/api && npx wrangler tail cci-api-production
 
 1. ブラウザで `/admin/data-sources/` を開く
 2. 設定画面で Admin Key を入力
-3. 対象データソースの CSV を `/admin/fetch-jobs/` からアップロード
-4. 取込履歴で成功/エラー行を確認
+3. 公式データソース（e-Stat 等）は「URLから取得」で直接ダウンロードして取込（xlsx/CSV対応）
+4. それ以外は対象データソースの CSV/Excel を「データ取込」からアップロード
+5. 取込履歴 `/admin/fetch-jobs/` で成功/エラー行を確認
+
+詳細は [データ取得手順書](./data-acquisition.md) を参照してください。
+
+URL取込 CLI:
+
+```bash
+curl -X POST -H "Content-Type: application/json" -H "X-Admin-Key: $ADMIN_API_KEY" \
+  -d '{"data_source_id":"<UUID>","url":"https://..."}' \
+  http://<IP>:3000/api/fetch-jobs
+```
 
 CLI から:
 

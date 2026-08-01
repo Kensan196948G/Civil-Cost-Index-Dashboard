@@ -2,8 +2,9 @@
 
 ## 1. リリース前チェック
 
-- [x] API: lint / typecheck / 単体テスト（30件） / ビルド（Worker dry-run + Node bundle）
-- [x] Web: lint / typecheck / 単体テスト（4件） / standalone ビルド（Docker）
+- [x] API: lint / typecheck / テスト47件（xlsx・URL取込・e-Stat変換・SSRFガード含む） / ビルド（Worker dry-run + Node bundle）
+- [x] Web: lint / typecheck / standalone ビルド（Docker・本番経路）
+- [x] データ取込: CSV/Excel 手動取込・URL取得・e-Stat 主要建設資材（表-2）専用変換・Shift_JIS 対応
 - [x] 依存監査: npm audit 0件 / pnpm audit 0件（postcss・sharp・echarts を修正版へ更新済み）
 - [x] 秘密・接続文字列・PII のリポジトリ/履歴露出なし（プレースホルダのみ）
 - [x] API 異常系: 401 / 409 / 400 / 501 / 404 を確認
@@ -19,7 +20,7 @@
 ```bash
 cd apps/api
 export DATABASE_URL="<Neon direct connection string>"   # 環境変数で指定（出力しない）
-npm run db:migrate   # migrations/001_init.sql + 002_seed_masters.sql を適用（冪等）
+npm run db:migrate   # migrations/001〜003 を適用（冪等。003=公式データソース＋骨材/木材マスタ）
 npm run db:seed      # サンプル/マスタ投入（同一ハッシュ重複はスキップ）
 ```
 

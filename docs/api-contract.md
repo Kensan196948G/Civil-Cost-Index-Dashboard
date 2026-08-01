@@ -32,6 +32,7 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | POST | `/api/data-sources` | Create data source (admin) |
 | PATCH | `/api/data-sources/{id}` | Update data source (admin) |
 | GET | `/api/fetch-jobs` | Fetch/transform history |
+| POST | `/api/fetch-jobs` | Fetch from public URL and ingest (admin) |
 | POST | `/api/uploads` | Upload CSV/Excel (admin, multipart) |
 | GET | `/api/export/csv` | CSV export (same filters as /timeseries) |
 | POST | `/api/export/report` | Minimal PDF report (optional) |
@@ -135,6 +136,14 @@ GET `/api/fetch-jobs?status=&limit=50` response `data`:
 ```json
 { "fetch_jobs": [ { "id": "uuid", "data_source_id": "uuid", "data_source_name": "...", "job_type": "manual_upload", "status": "success", "file_name": "sample.csv", "file_hash": "sha256:...", "total_rows": 120, "success_rows": 118, "error_rows": 2, "error_detail": [{ "row": 5, "column": "value", "reason": "数値変換失敗" }], "started_at": "...", "finished_at": "..." } ] }
 ```
+
+## POST /api/fetch-jobs
+
+POST `/api/fetch-jobs` body (admin): `{ "data_source_id": "uuid", "url": "https://..." }`.
+`url` is optional when the data source has `source_url`. Downloads CSV/Excel (max 10MB,
+30s timeout, SSRF guard), dedupes by SHA-256, and ingests via the same transform as uploads.
+For source code `ESTAT_MATERIAL_SUPPLY`, the e-Stat 表-2 workbook is auto-converted to
+national-average monthly rows before ingestion.
 
 ## POST /api/uploads
 

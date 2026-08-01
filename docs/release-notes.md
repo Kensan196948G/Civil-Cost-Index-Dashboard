@@ -1,5 +1,23 @@
 # リリースノート
 
+## Unreleased（作業ブランチ: 公式データソース取込対応）
+
+### 追加
+
+- データソース管理に公式データソース4件を登録（e-Stat 主要建設資材需給・価格動向調査 / e-Stat 消費者物価指数 / けんせつPlaza / 公共工事設計労務単価）
+- URLから直接取得する取込機能（POST /api/fetch-jobs、SSRFガード・10MB制限・SHA-256重複防止）
+- e-Stat 主要建設資材需給・価格動向調査（表-2）の専用変換（全国平均値の価格動向指数を月次系列化）
+- Excel（xlsx）取込対応（手動アップロード・URL取得の両方）
+- Shift_JIS CSV の自動判定・デコード
+- 骨材4品目・木材2品目のマスタ追加（migration 003）
+- データ取得手順書 `docs/data-acquisition.md` を新設
+
+### 検証結果
+
+- API: lint / typecheck / テスト 47件 PASS / Workerビルド dry-run 成功
+- Web: lint / typecheck PASS / Dockerビルド（本番経路）成功
+- ローカル `next build` はサンドボックスの仮想メモリ上限（ulimit -v 20GB）による Wasm 確保失敗のため未実施（環境要因・コード起因ではない）
+
 ## v0.1.0（2026-07-31）初回本番リリース
 
 ### リリース内容

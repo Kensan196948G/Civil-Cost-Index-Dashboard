@@ -69,13 +69,16 @@ export default function ComparePage() {
 
   useEffect(() => {
     if (items.length === 0 || regions.length === 0) return;
-    setTokens((prev) =>
-      prev.map((t) => ({
+    setTokens((prev) => {
+      const next = prev.map((t) => ({
         ...t,
         itemCode: t.itemCode || (items.find((i) => i.category === t.dataType)?.item_code ?? ""),
         regionCode: t.regionCode || (regions.find((r) => r.region_code === "JP-01")?.region_code ?? ""),
-      }))
-    );
+      }));
+      void load(next, normalize, basePeriod);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, regions]);
 
   const ranking = [...series]

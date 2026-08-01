@@ -17,6 +17,8 @@ export default function DataSourcesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDsId, setUploadDsId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +54,22 @@ export default function DataSourcesPage() {
       await load();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "更新に失敗しました");
+    }
+  };
+
+  const doUpload = async () => {
+    setNotice(null);
+    if (!uploadFile || !uploadDsId) {
+      setNotice("ファイルとデータソースを選択してください。");
+      return;
+    }
+    try {
+      const job = await api.upload(uploadFile, uploadDsId, adminKey);
+      setNotice(`取込完了: ${job.status}（成功 ${job.success_rows} / エラー ${job.error_rows}）`);
+      setUploadFile(null);
+      await load();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "取込に失敗しました");
     }
   };
 
@@ -160,6 +178,36 @@ export default function DataSourcesPage() {
             </div>
             <button onClick={() => void create()} className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
               登録
+            </button>
+          </div>
+          <div className="cci-card p-4">
+            <h2 className="mb-1 text-base font-semibold">データ取込（CSV / Excel）</h2>
+            <p className="mb-3 text-xs text-gray-500">
+              標準CSV形式（年月,品目,規格,地域,値,単位,状態,出典,注記）または Excel の最初のシートを取込みます。取込結果は「取込履歴」で確認できます。
+            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <label className={labelCls}>データソース*</label>
+                <select className={inputCls} value={uploadDsId} onChange={(e) => setUploadDsId(e.target.value)}>
+                  <option value="">選択してください</option>
+                  {sources.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.source_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>ファイル*</label>
+                <input type="file" accept=".csv,.xlsx" className={inputCls} onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} />
+              </div>
+              <div>
+                <label className={labelCls}>管理者キー（X-Admin-Key）</label>
+                <input type="password" className={inputCls} value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="本番では設定必須" />
+              </div>
+            </div>
+            <button onClick={() => void doUpload()} className="cci-btn-primary mt-3" disabled={!uploadFile || !uploadDsId}>
+              アップロードして取込
             </button>
           </div>
         </>

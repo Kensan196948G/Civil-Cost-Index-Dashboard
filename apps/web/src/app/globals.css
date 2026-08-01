@@ -3,9 +3,30 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-100 text-gray-900;
+  @apply bg-[#EEF1F5] text-[#1A2433];
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
 }
 
-.dark body {
-  @apply bg-gray-900 text-gray-100;
+@layer components {
+  .cci-card {
+    @apply rounded-xl border border-gray-200/80 bg-white shadow-sm;
+  }
+  .cci-chip {
+    @apply inline-flex cursor-pointer items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 transition-colors hover:border-blue-300 hover:bg-blue-50;
+  }
+  .cci-chip-active {
+    @apply border-blue-600 bg-blue-600 text-white hover:bg-blue-700;
+  }
+  .cci-label {
+    @apply mb-1 block text-xs font-semibold text-gray-500;
+  }
+  .cci-input {
+    @apply w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+  }
+  .cci-btn-primary {
+    @apply rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40;
+  }
+  .cci-btn-ghost {
+    @apply rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-40;
+  }
 }

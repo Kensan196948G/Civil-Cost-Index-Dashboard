@@ -61,5 +61,13 @@
 - 環境ファイル: `/etc/cci/cci.env`（root のみ読取可）
 - Cloudflare Workers（`cci-api-production` / `cci-web-assets`）は一時プレビューとして維持
 
+## 5.2 Migration / Rollback（要約）
+
+詳細は `docs/release-checklist.md` 参照。
+
+- Forward: `npm run db:migrate`（冪等・後方互換 SQL のみ）
+- Rollback: アプリ側を旧バージョンへ切替（Docker image / `wrangler rollback`）。DB は Neon PITR / ブランチで復旧
+- 破壊的マイグレーション（DROP / TRUNCATE / RESET）は承認なしに実行しない
+
 - GitHub Actions `Deploy`（`.github/workflows/deploy.yml`）: main push 時に API・Web をデプロイ
 - デプロイトークン: `CLOUDFLARE_API_TOKEN`（GitHub Secret）

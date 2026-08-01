@@ -45,10 +45,14 @@
 | Worker カスタムドメイン | `cci-web-assets`（zone_id: `e375e651e49a40801a305b89e297bff0`） |
 | 設定経路 | GitHub Actions `Deploy Cloudflare (manual)` の `configure-domain` ジョブ（冪等） |
 | CORS | API Worker の `CORS_ORIGINS` に `https://ccid.mirai-dx-platform.com` を追加済み |
-| Access | **適用予定（利用者側で実施）**。適用前は一般公開のため注意 |
+| Access | **適用済み（2026-08-01、利用者側で設定）**。アプリ名 `ccid`（self_hosted）、ポリシーID `5a9f0252-85a4-490e-8814-5752bb4559f8`、Allow: メールドメイン `mirai-const.co.jp` / メール `kensan1969@gmail.com` |
 
 API 用サブドメイン（例: `api.ccid.mirai-dx-platform.com`）は未設定（現状は
 `cci-api-production.kensan1969.workers.dev` を使用）。
+
+> **注意（2026-08-01 時点）**: Access アプリは作成済みだが、**DNS レコード（AAAA 100::）と
+> Workers カスタムドメイン（cci-web-assets）は未作成**のため、`ccid.mirai-dx-platform.com` は
+> まだインターネット上に公開されていない。DNS 追加後に Access が有効化される。
 
 ## 5. 承認済み CI/CD 経路
 

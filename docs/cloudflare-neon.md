@@ -7,7 +7,7 @@
 | Cloudflare アカウント | Kensan1969@gmail.com's Account |
 | ゾーン | `mirai-dx-platform.com`（Free plan, full setup） |
 | API Worker | `cci-api-production` → <https://cci-api-production.kensan1969.workers.dev> |
-| Web Worker（静的アセット） | `cci-web-assets` → <https://cci-web-assets.kensan1969.workers.dev> |
+| Web Worker（静的アセット） | `cci-web-assets` → <https://cci-web-assets.kensan1969.workers.dev> / <https://ccid.mirai-dx-platform.com> |
 | Neon プロジェクト | `civil-cost-index-dashboard`（id: hidden-pond-85970897, region: aws-ap-southeast-1, PG17） |
 | Neon DB | `neondb`（role: neondb_owner） |
 | Workers サブドメイン | `kensan1969.workers.dev` |
@@ -27,6 +27,9 @@
 - 静的アセット: `apps/web/out`（Next.js `output: export`, trailingSlash: true）
 - `html_handling: force-trailing-slash` / `not_found_handling: 404-page`
 - セキュリティヘッダー: `public/_headers`（CSP / X-Frame-Options / nosniff / Referrer-Policy / Permissions-Policy）
+  - standalone HTML（`/`・`/standalone.html`・`/index.html`）はバンドル仕様のため
+    `script-src 'unsafe-inline' 'unsafe-eval' blob: data:` 等に緩和（2026-08-01、Unpacking停止の修正）
+  - React 管理画面（/timeseries 等）と `/_next/*` は従来どおり厳格な CSP を維持
 
 ## 3. Neon 運用
 
@@ -35,19 +38,24 @@
 - シード: `npm run db:seed`（SHA-256 ハッシュで冪等）
 - テーブル: regions / items / data_sources / time_series_values / source_files / transform_logs
 
-## 4. カスタムドメイン（未設定・要決定）
+## 4. カスタムドメイン（2026-08-01 決定・設定済み）
 
-対象サブドメインは既存設定・設計書・環境変数から特定できなかったため、候補を文書化する。
-**DNS変更は未実施。**
+| 項目 | 値 |
+| --- | --- |
+| ドメイン | `ccid.mirai-dx-platform.com`（ゾーン: `mirai-dx-platform.com`） |
+| 用途 | Web UI（cci-web-assets 静的アセット） |
+| DNS | AAAA `100::`（proxied）※ 作成済み（2026-08-01、カスタムドメインアタッチ時に自動生成） |
+| Worker カスタムドメイン | `cci-web-assets`（zone_id: `e375e651e49a40801a305b89e297bff0`、domain_id: `a99f2d3f14a8d2085cb2de974415317538380080`） |
+| 設定経路 | GitHub Actions `Deploy Cloudflare (manual)` の `configure-domain` ジョブ（冪等） |
+| CORS | API Worker の `CORS_ORIGINS` に `https://ccid.mirai-dx-platform.com` を追加済み |
+| Access | **適用済み・動作確認済み（2026-08-01）**。アプリ名 `ccid`（self_hosted）、ポリシーID `5a9f0252-85a4-490e-8814-5752bb4559f8`、Allow: メールドメイン `mirai-const.co.jp` / メール `kensan1969@gmail.com`。未認証アクセスは <https://winter-lake-f4c9.cloudflareaccess.com> のログインへ302 |
 
-| 候補 | 用途 | 接続先（想定） |
-| --- | --- | --- |
-| `cci.mirai-dx-platform.com` | Web | CNAME → `cci-web-assets.kensan1969.workers.dev` |
-| `civil-cost-index.mirai-dx-platform.com` | Web | 同上 |
-| `costindex.mirai-dx-platform.com` | Web | 同上 |
-| `api.cci.mirai-dx-platform.com` | API（任意） | Workers ルートパターン |
+API 用サブドメイン（例: `api.ccid.mirai-dx-platform.com`）は未設定（現状は
+`cci-api-production.kensan1969.workers.dev` を使用）。
 
-決定後: DNS レコード追加 → Workers カスタムドメイン（またはルート）→ Cloudflare Access 適用 → CORS_ORIGINS 更新。
+> **検証（2026-08-01）**: `curl https://ccid.mirai-dx-platform.com/` は HTTP 302 で
+> Cloudflare Access ログインへリダイレクト（`aud=372d61...` が ccid アプリと一致）。
+> 認証後は cci-web-assets（standalone HTML）が表示される。
 
 ## 5. 承認済み CI/CD 経路
 

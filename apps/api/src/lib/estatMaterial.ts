@@ -126,8 +126,8 @@ export function parseEstatMaterialSupply(buffer: ArrayBuffer): {
     }
     if (!currentItem) continue;
 
-    // National average row.
-    if (/全国平均値/.test(col1)) {
+    // National average row (実ファイルでは列A、一部の派生形式では列Bに記載される)。
+    if (/全国平均値/.test(col0) || /全国平均値/.test(col1)) {
       const value = parseIndexValue(line[3]);
       if (value == null) {
         skips.push({ row: i + 1, reason: `${currentItem} 全国平均値の値が取得できません` });

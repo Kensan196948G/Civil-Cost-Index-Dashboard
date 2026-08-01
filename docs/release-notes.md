@@ -2,6 +2,22 @@
 
 ## Unreleased（作業ブランチ: 公式データソース取込対応）
 
+## Unreleased（2026-08-01: ccid ドメイン設定）
+
+- サブドメインを `ccid.mirai-dx-platform.com` に決定
+- Workers カスタムドメイン（cci-web-assets）＋DNS（AAAA 100::）を GitHub Actions の `Deploy Cloudflare (manual)` で冪等管理（configure-domain ジョブ）
+- API Worker の CORS_ORIGINS に ccid ドメインを追加
+- ルート「/」を standalone HTML へサーバー内 rewrite（LAN Docker 運用向け・リダイレクトなし）
+- Cloudflare Access は利用者側で適用予定（適用前は一般公開）
+
+## Unreleased（2026-08-01: Cloudflare 上で Unpacking 停止の修正）
+
+- 原因: `_headers` の厳格 CSP（`script-src 'self'`）が standalone バンドルのインライン/Blob/評価スクリプトをブロック
+- 対応: standalone パス（`/`・`/standalone.html`・`/index.html`）に限り CSP を緩和（`unsafe-inline` `unsafe-eval` `blob:` `data:`、`frame-src blob:`、`frame-ancestors 'self'`）。React 管理画面は厳格 CSP を維持
+- 検証: Playwright（Chromium）で `cci-web-assets.kensan1969.workers.dev/` を実ブラウザ確認
+  - アプリ描画 PASS / Unpacking 表示消滅 PASS / console errors なし
+- ccid.mirai-dx-platform.com は Access 認証後、同一アセットのため正常表示される見込み
+
 ### 追加
 
 - データソース管理に公式データソース4件を登録（e-Stat 主要建設資材需給・価格動向調査 / e-Stat 消費者物価指数 / けんせつPlaza / 公共工事設計労務単価）

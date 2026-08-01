@@ -15,13 +15,14 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     // 同一オリジン /api をローカルAPIへプロキシ（NEXT_PUBLIC_API_BASE_URL 未設定時）
-    if (apiBase) return [];
-    return [
-      {
+    const rewrites = [];
+    if (!apiBase) {
+      rewrites.push({
         source: "/api/:path*",
         destination: `${process.env.API_PROXY_TARGET ?? "http://127.0.0.1:8000"}/api/:path*`,
-      },
-    ];
+      });
+    }
+    return rewrites;
   },
 };
 

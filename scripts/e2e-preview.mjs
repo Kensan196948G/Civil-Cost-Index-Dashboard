@@ -31,12 +31,28 @@ async function goto(path) {
   await page.waitForTimeout(1200);
 }
 
-// 1. トップダッシュボード
+// 1. トップダッシュボード（standalone HTML 100%適用）
 await goto("/");
-check("dashboard: 見出し", (await page.getByRole("heading", { name: "トップダッシュボード" }).count()) === 1);
-check("dashboard: KPIカード（前月比）", (await page.getByText("前月比", { exact: false }).count()) >= 3);
-check("dashboard: グラフ canvas", (await page.locator("canvas").count()) >= 1);
-check("dashboard: 注目変動パネル", (await page.getByText("注目変動", { exact: false }).count()) >= 1);
+check("dashboard: standalone タイトル", (await page.getByText("Civil Cost Index", { exact: false }).count()) >= 1);
+try {
+  await page.waitForFunction(() => document.body && document.body.innerText.includes("最新動向"), { timeout: 15000 });
+  check("dashboard: サブタイトル", true);
+} catch {
+  check("dashboard: サブタイトル", false, "standalone 描画が完了しない");
+}
+check("dashboard: 主要指標", (await page.getByText("主要指標", { exact: false }).count()) >= 1);
+check("dashboard: グラフ要素", (await page.locator("canvas, svg").count()) >= 1);
+check("dashboard: 注目変動", (await page.getByText("注目変動", { exact: false }).count()) >= 1);
+
+// 1.1 standalone サイドバー遷移
+const tsNav = page.getByText("時系列分析", { exact: true }).first();
+if (await tsNav.count()) {
+  await tsNav.click();
+  await page.waitForTimeout(800);
+  check("standalone: 時系列分析ビュー", (await page.getByText("絞り込み条件", { exact: false }).count()) >= 1);
+} else {
+  check("standalone: 時系列分析ビュー", false, "ナビゲーションが見つからない");
+}
 
 // 2. 時系列分析
 await goto("/timeseries");
@@ -84,13 +100,13 @@ await goto("/settings");
 check("settings: 見出し", (await page.getByRole("heading", { name: "ユーザー設定" }).count()) === 1);
 check("settings: 保存ボタン", (await page.getByRole("button", { name: "保存" }).count()) === 1);
 
-// 9. モバイル表示（375px）
+// 9. モバイル表示（375px）standalone ルート
 const mobile = await browser.newPage({ viewport: { width: 375, height: 667 } });
 await mobile.goto(BASE + "/", { waitUntil: "networkidle", timeout: 30000 });
 await mobile.waitForTimeout(1200);
 const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 check("mobile: 横スクロールなし", !overflow, overflow ? `scrollWidth=${overflow}` : "");
-check("mobile: トップ見出し", (await mobile.getByRole("heading", { name: "トップダッシュボード" }).count()) === 1);
+check("mobile: standalone 表示", (await mobile.getByText("Civil Cost Index", { exact: false }).count()) >= 1);
 await mobile.close();
 
 // 10. アクセシビリティ基本確認

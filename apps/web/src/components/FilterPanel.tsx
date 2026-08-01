@@ -2,6 +2,7 @@
 
 import { CATEGORY_LABELS } from "@/lib/api";
 import type { DataCategory, Item, Region } from "@/types/api";
+import { classNames } from "@/lib/utils";
 
 export interface FilterValues {
   dataType: DataCategory;
@@ -14,6 +15,12 @@ export interface FilterValues {
   chartType: "line" | "bar";
 }
 
+const PERIOD_PRESETS = [
+  { label: "1年", months: 12 },
+  { label: "3年", months: 36 },
+  { label: "全期間", months: 0 },
+] as const;
+
 export default function FilterPanel({
   values,
   items,
@@ -25,107 +32,112 @@ export default function FilterPanel({
   regions: Region[];
   onChange: (next: Partial<FilterValues>) => void;
 }) {
-  const labelCls = "mb-1 block text-xs font-semibold text-gray-600";
-  const inputCls = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
+  const filteredItems = items.filter((i) => i.category === values.dataType);
+  const today = new Date();
+  const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+
+  const applyPeriod = (months: number) => {
+    if (months === 0) {
+      onChange({ startPeriod: "", endPeriod: "" });
+      return;
+    }
+    const d = new Date(today.getFullYear(), today.getMonth() - (months - 1), 1);
+    onChange({ startPeriod: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, endPeriod: thisMonth });
+  };
+
+  const toggleId = (list: string[], id: string) =>
+    list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+    <div className="cci-card space-y-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-gray-800">絞り込み条件</span>
+        <button className="text-xs text-blue-600 hover:underline" onClick={() => onChange({ itemIds: [], regionIds: [], startPeriod: "", endPeriod: "", normalize: false, basePeriod: "" })}>
+          初期化
+        </button>
+      </div>
+
+      <div>
+        <div className="cci-label">データ分類</div>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(CATEGORY_LABELS) as DataCategory[]).map((c) => (
+            <button
+              key={c}
+              onClick={() => onChange({ dataType: c, itemIds: [] })}
+              className={classNames("cci-chip", values.dataType === c && "cci-chip-active")}
+            >
+              {CATEGORY_LABELS[c]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="cci-label">品目（{values.itemIds.length} / {filteredItems.length} 選択）</div>
+        <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+          {filteredItems.map((i) => (
+            <button
+              key={i.id}
+              onClick={() => onChange({ itemIds: toggleId(values.itemIds, i.id) })}
+              className={classNames("cci-chip", values.itemIds.includes(i.id) && "cci-chip-active")}
+              title={i.standard_name ?? ""}
+            >
+              {i.item_name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="cci-label">地域</div>
+        <div className="flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
+          {regions.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => onChange({ regionIds: toggleId(values.regionIds, r.id) })}
+              className={classNames("cci-chip", values.regionIds.includes(r.id) && "cci-chip-active")}
+            >
+              {r.region_name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label htmlFor="fp-data-type" className={labelCls}>データ分類</label>
-          <select
-            id="fp-data-type"
-            className={inputCls}
-            value={values.dataType}
-            onChange={(e) => onChange({ dataType: e.target.value as DataCategory, itemIds: [] })}
-          >
-            {(Object.keys(CATEGORY_LABELS) as DataCategory[]).map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABELS[c]}
-              </option>
+          <div className="cci-label">期間</div>
+          <div className="flex gap-1.5">
+            {PERIOD_PRESETS.map((p) => (
+              <button key={p.label} onClick={() => applyPeriod(p.months)} className="cci-chip">
+                {p.label}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
-        <div>
-          <label htmlFor="fp-items" className={labelCls}>品目（複数選択可）</label>
+        <div className="flex items-center gap-2">
+          <input type="month" className="cci-input w-36" value={values.startPeriod} onChange={(e) => onChange({ startPeriod: e.target.value })} />
+          <span className="text-xs text-gray-400">〜</span>
+          <input type="month" className="cci-input w-36" value={values.endPeriod} onChange={(e) => onChange({ endPeriod: e.target.value })} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={values.normalize} onChange={(e) => onChange({ normalize: e.target.checked })} className="h-4 w-4 accent-blue-600" />
+          指数化（基準年月＝100）
+        </label>
+        <input type="month" className="cci-input w-36" value={values.basePeriod} disabled={!values.normalize} onChange={(e) => onChange({ basePeriod: e.target.value })} />
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          グラフ
           <select
-            id="fp-items"
-            className={inputCls}
-            multiple
-            size={3}
-            value={values.itemIds}
-            onChange={(e) => onChange({ itemIds: [...e.target.selectedOptions].map((o) => o.value) })}
+            className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+            value={values.chartType}
+            onChange={(e) => onChange({ chartType: e.target.value as "line" | "bar" })}
           >
-            {items.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.item_name}
-              </option>
-            ))}
+            <option value="line">折れ線</option>
+            <option value="bar">棒</option>
           </select>
-        </div>
-        <div>
-          <label htmlFor="fp-regions" className={labelCls}>地域（複数選択可）</label>
-          <select
-            id="fp-regions"
-            className={inputCls}
-            multiple
-            size={3}
-            value={values.regionIds}
-            onChange={(e) => onChange({ regionIds: [...e.target.selectedOptions].map((o) => o.value) })}
-          >
-            {regions.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.region_name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label htmlFor="fp-start" className={labelCls}>開始</label>
-            <input
-              id="fp-start"
-              type="month"
-              className={inputCls}
-              value={values.startPeriod}
-              onChange={(e) => onChange({ startPeriod: e.target.value })}
-            />
-          </div>
-          <div>
-            <label htmlFor="fp-end" className={labelCls}>終了</label>
-            <input id="fp-end" type="month" className={inputCls} value={values.endPeriod} onChange={(e) => onChange({ endPeriod: e.target.value })} />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label htmlFor="fp-base" className={labelCls}>基準年月</label>
-            <input
-              id="fp-base"
-              type="month"
-              className={inputCls}
-              value={values.basePeriod}
-              onChange={(e) => onChange({ basePeriod: e.target.value })}
-              disabled={!values.normalize}
-            />
-          </div>
-          <div>
-            <label htmlFor="fp-chart" className={labelCls}>グラフ</label>
-            <select id="fp-chart" className={inputCls} value={values.chartType} onChange={(e) => onChange({ chartType: e.target.value as "line" | "bar" })}>
-              <option value="line">折れ線</option>
-              <option value="bar">棒</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex items-end pb-1">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={values.normalize}
-              onChange={(e) => onChange({ normalize: e.target.checked })}
-              className="h-4 w-4"
-            />
-            指数化（基準年月=100）
-          </label>
-        </div>
+        </label>
       </div>
     </div>
   );

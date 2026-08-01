@@ -31,33 +31,30 @@ async function goto(path) {
   await page.waitForTimeout(1200);
 }
 
-// 1. トップダッシュボード（standalone HTML 100%適用）
+// 1. トップダッシュボード（standalone デザイン準拠・ライトモード）
 await goto("/");
-check("dashboard: standalone タイトル", (await page.getByText("Civil Cost Index", { exact: false }).count()) >= 1);
-try {
-  await page.waitForFunction(() => document.body && document.body.innerText.includes("最新動向"), { timeout: 15000 });
-  check("dashboard: サブタイトル", true);
-} catch {
-  check("dashboard: サブタイトル", false, "standalone 描画が完了しない");
-}
+check("dashboard: タイトル", (await page.getByText("Civil Cost Index", { exact: false }).count()) >= 1);
 check("dashboard: 主要指標", (await page.getByText("主要指標", { exact: false }).count()) >= 1);
 check("dashboard: グラフ要素", (await page.locator("canvas, svg").count()) >= 1);
 check("dashboard: 注目変動", (await page.getByText("注目変動", { exact: false }).count()) >= 1);
+check("dashboard: 稼働データソース", (await page.getByText("稼働データソース", { exact: false }).count()) >= 1);
+const asideBg = await page.locator("aside").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+check("sidebar: ライトモード", asideBg === "rgb(255, 255, 255)", asideBg);
 
-// 1.1 standalone サイドバー遷移
-const tsNav = page.getByText("時系列分析", { exact: true }).first();
+// 1.1 サイドバー遷移
+const tsNav = page.getByRole("link", { name: /時系列分析/ }).first();
 if (await tsNav.count()) {
   await tsNav.click();
   await page.waitForTimeout(800);
-  check("standalone: 時系列分析ビュー", (await page.getByText("絞り込み条件", { exact: false }).count()) >= 1);
+  check("sidebar: 時系列分析へ遷移", (await page.getByText("絞り込み条件", { exact: false }).count()) >= 1);
 } else {
-  check("standalone: 時系列分析ビュー", false, "ナビゲーションが見つからない");
+  check("sidebar: 時系列分析へ遷移", false, "ナビゲーションが見つからない");
 }
 
 // 2. 時系列分析
 await goto("/timeseries");
 check("timeseries: 見出し", (await page.getByRole("heading", { name: "時系列分析" }).count()) === 1);
-check("timeseries: フィルター", (await page.getByLabel("データ分類").count()) === 1);
+check("timeseries: フィルター", (await page.getByText("データ分類", { exact: false }).count()) >= 1);
 check("timeseries: グラフ canvas", (await page.locator("canvas").count()) >= 1);
 try {
   await page.getByText("年月", { exact: false }).first().waitFor({ timeout: 10000 });
@@ -100,13 +97,13 @@ await goto("/settings");
 check("settings: 見出し", (await page.getByRole("heading", { name: "ユーザー設定" }).count()) === 1);
 check("settings: 保存ボタン", (await page.getByRole("button", { name: "保存" }).count()) === 1);
 
-// 9. モバイル表示（375px）standalone ルート
+// 9. モバイル表示（375px）
 const mobile = await browser.newPage({ viewport: { width: 375, height: 667 } });
 await mobile.goto(BASE + "/", { waitUntil: "networkidle", timeout: 30000 });
 await mobile.waitForTimeout(1200);
 const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 check("mobile: 横スクロールなし", !overflow, overflow ? `scrollWidth=${overflow}` : "");
-check("mobile: standalone 表示", (await mobile.getByText("Civil Cost Index", { exact: false }).count()) >= 1);
+check("mobile: 表示", (await mobile.getByText("Civil Cost Index", { exact: false }).count()) >= 1);
 await mobile.close();
 
 // 10. アクセシビリティ基本確認

@@ -87,13 +87,19 @@ import {
   listVessels,
   listWorkTypes,
   estimatePort,
+  importVessels,
+  listSeaConditions,
+  upsertSeaCondition,
+  computeWorkability,
   portEstimateSchema,
+  seaConditionSchema,
 } from "./services/portModels";
 import {
   listEstimationBases,
   createEstimationBase,
   updateEstimationBase,
   upsertOverheadRate,
+  importOverheadRates,
   listTrees,
   createTree,
   listBreakdowns,
@@ -1071,6 +1077,67 @@ app.post("/api/port-models/estimate", async (c) => {
   }
 });
 
+app.post("/api/vessels/import", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const form = await c.req.formData().catch(() => null);
+  if (!form) return fail(c, "VALIDATION_ERROR", "multipart/form-data が必要です。", 400);
+  const file = form.get("file");
+  if (!(file instanceof File)) return fail(c, "VALIDATION_ERROR", "file が必要です。", 400);
+  try {
+    const buffer = await file.arrayBuffer();
+    const fileName = file.name.toLowerCase();
+    const rows = fileName.endsWith(".xlsx")
+      ? parseWorkbookRows(buffer)
+      : parseCsv(decodeBuffer(buffer));
+    const result = await importVessels(sql, { rows });
+    await recordAudit(sql, identity, "vessel.import", "vessel", "", { imported: result.imported, errors: result.errors.length });
+    return ok(c, { result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/port-models/sea-conditions", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { sea_conditions: await listSeaConditions(sql, c.req.query("sea_area_code") ?? undefined) });
+});
+
+app.post("/api/port-models/sea-conditions", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = seaConditionSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await upsertSeaCondition(sql, parsed.data);
+    await recordAudit(sql, identity, "sea_condition.upsert", "sea_condition", String(id), { sea_area_code: parsed.data.sea_area_code, month: parsed.data.target_month });
+    return ok(c, { sea_condition_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/port-models/workability", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const parsed = z
+    .object({
+      sea_area_code: z.string().min(1),
+      target_month: z.number().int().min(1).max(12),
+      wave_height: z.number().min(0).optional().nullable(),
+      wind_speed: z.number().min(0).optional().nullable(),
+    })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const result = await computeWorkability(sql, parsed.data);
+    return ok(c, { workability: result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
 // ---- 積算エンジン（Phase 4） ----
 
 const ESTIMATE_WRITE_ROLES = ["data_ingester", "data_approver", "estimator", "estimating_manager", "system_admin"];
@@ -1119,6 +1186,27 @@ app.put("/api/estimation-bases/:id/rates/:rateType", async (c) => {
     const id = await upsertOverheadRate(sql, c.req.param("id"), c.req.param("rateType"), parsed.data);
     await recordAudit(sql, identity, "overhead_rate.upsert", "overhead_rate", String(id), { rate_type: c.req.param("rateType") });
     return ok(c, { rate_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/estimation-bases/:id/rates/import", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const form = await c.req.formData().catch(() => null);
+  if (!form) return fail(c, "VALIDATION_ERROR", "multipart/form-data が必要です。", 400);
+  const file = form.get("file");
+  if (!(file instanceof File)) return fail(c, "VALIDATION_ERROR", "file が必要です。", 400);
+  try {
+    const buffer = await file.arrayBuffer();
+    const fileName = file.name.toLowerCase();
+    const rows = fileName.endsWith(".xlsx")
+      ? parseWorkbookRows(buffer)
+      : parseCsv(decodeBuffer(buffer));
+    const result = await importOverheadRates(sql, { baseId: c.req.param("id"), rows });
+    await recordAudit(sql, identity, "overhead_rate.import", "estimation_base", c.req.param("id"), { imported: result.imported, errors: result.errors.length });
+    return ok(c, { result });
   } catch (e) {
     return handleError(c, e);
   }

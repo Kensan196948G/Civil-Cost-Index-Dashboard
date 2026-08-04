@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { formatNumber, formatDateTime, downloadFile } from "@/lib/utils";
-import type { BreakdownSuggestion, EstimationBase, EstimateDetail, EstimateSummary, ProjectSummary } from "@/types/api";
+import type { BreakdownSuggestion, EstimationBase, EstimateDetail, EstimateSummary, ProjectSummary, SeaCondition } from "@/types/api";
 
 export default function EstimatesPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -18,6 +18,10 @@ export default function EstimatesPage() {
     soil_correction: "0",
     night_surcharge: "0",
   });
+  const [seaOptions, setSeaOptions] = useState<SeaCondition[]>([]);
+  const [seaArea, setSeaArea] = useState("");
+  const [seaMonth, setSeaMonth] = useState("8");
+  const [seaNote, setSeaNote] = useState("");
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
   const [detail, setDetail] = useState<EstimateDetail | null>(null);
   const [suggestion, setSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -50,6 +54,29 @@ export default function EstimatesPage() {
 
   useEffect(() => { void loadAll(); }, [loadAll]);
   useEffect(() => { void loadEstimates(); }, [loadEstimates]);
+
+  useEffect(() => {
+    if (selectedBase?.category !== "port") return;
+    void api.seaConditions().then((r) => {
+      setSeaOptions(r.sea_conditions);
+      const first = r.sea_conditions[0];
+      if (first) {
+        setSeaArea(first.sea_area_code);
+        void applyWorkability(first.sea_area_code, Number(seaMonth));
+      }
+    }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseId]);
+
+  const applyWorkability = async (area: string, month: number) => {
+    try {
+      const res = await api.computeWorkability({ sea_area_code: area, target_month: month });
+      setPortForm((p) => ({ ...p, operation_rate: String(res.workability.operation_rate) }));
+      setSeaNote(`${res.workability.sea_area_name} ${month}月: 施工可能 ${res.workability.workable_days}日 / ${res.workability.calendar_days}日 → 稼働率 ${res.workability.operation_rate}`);
+    } catch (e) {
+      setSeaNote(e instanceof Error ? e.message : "海象条件の取得に失敗しました");
+    }
+  };
 
   const calculate = async () => {
     setCalculating(true);
@@ -150,6 +177,20 @@ export default function EstimatesPage() {
         {isPort && (
           <div className="flex flex-wrap items-end gap-3 rounded border border-blue-200 bg-blue-50 p-3">
             <div>
+              <label className={labelCls}>海域</label>
+              <select className="w-40 rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={seaArea} onChange={(e) => { setSeaArea(e.target.value); void applyWorkability(e.target.value, Number(seaMonth)); }}>
+                {[...new Set(seaOptions.map((s) => s.sea_area_code))].map((code) => (
+                  <option key={code} value={code}>{seaOptions.find((s) => s.sea_area_code === code)?.sea_area_name ?? code}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>施工予定月</label>
+              <select className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={seaMonth} onChange={(e) => { setSeaMonth(e.target.value); void applyWorkability(seaArea, Number(e.target.value)); }}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => <option key={m} value={String(m)}>{m}月</option>)}
+              </select>
+            </div>
+            <div>
               <label className={labelCls}>稼働率</label>
               <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" min={0.1} max={1} step={0.05} value={portForm.operation_rate} onChange={(e) => setPortForm({ ...portForm, operation_rate: e.target.value })} />
             </div>
@@ -166,6 +207,7 @@ export default function EstimatesPage() {
               <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" step={1} value={portForm.night_surcharge} onChange={(e) => setPortForm({ ...portForm, night_surcharge: e.target.value })} />
             </div>
             <span className="text-xs text-blue-700">港湾: 船舶損料・供用係数・回航費・拘束費を自動算定</span>
+            {seaNote && <div className="w-full text-xs text-blue-700">{seaNote}</div>}
           </div>
         )}
         <button onClick={() => void calculate()} disabled={calculating || !projectId || !baseId} className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">

@@ -39,6 +39,7 @@ import type {
   Region,
   SimulationRequest,
   SimulationResult,
+  SeaCondition,
   StagedIngestion,
   TimeseriesParams,
   TimeseriesResponse,
@@ -47,6 +48,7 @@ import type {
   WorkBreakdown,
   WorkBreakdownInput,
   WorkTypeTree,
+  WorkabilityResult,
 } from "@/types/api";
 import { loadPrefs } from "@/lib/utils";
 
@@ -236,6 +238,42 @@ export const api = {
     request<{ deleted: boolean }>(`/api/estimates/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
   aiBreakdownSuggest: (input: { project_id: string; base_id: string }) =>
     request<{ suggestion: BreakdownSuggestion }>("/api/ai/breakdown-suggest", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  seaConditions: (seaAreaCode?: string) =>
+    request<{ sea_conditions: SeaCondition[] }>(`/api/port-models/sea-conditions${seaAreaCode ? `?sea_area_code=${seaAreaCode}` : ""}`),
+  upsertSeaCondition: (input: {
+    sea_area_code: string;
+    sea_area_name: string;
+    target_month: number;
+    wave_height_limit?: number | null;
+    wind_speed_limit?: number | null;
+    turbidity_allowed?: boolean;
+    navigation_restriction?: string | null;
+    workable_days: number;
+    calendar_days?: number;
+    note?: string | null;
+  }) =>
+    request<{ sea_condition_id: string }>("/api/port-models/sea-conditions", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  computeWorkability: (input: { sea_area_code: string; target_month: number; wave_height?: number | null; wind_speed?: number | null }) =>
+    request<{ workability: WorkabilityResult }>("/api/port-models/workability", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  importOverheadRates: (file: File, baseId: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("base_id", baseId);
+    return request<{ result: { imported: number; errors: Array<{ row: number; column: string; reason: string }> } }>(`/api/estimation-bases/${baseId}/rates/import`, {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: fd,
+    });
+  },
+  importVessels: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ result: { imported: number; errors: Array<{ row: number; column: string; reason: string }> } }>("/api/vessels/import", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: fd,
+    });
+  },
   regions: () => request<{ regions: Region[] }>("/api/regions"),
   items: (category?: DataCategory) =>
     request<{ items: Item[] }>(`/api/items${category ? `?category=${category}` : ""}`),

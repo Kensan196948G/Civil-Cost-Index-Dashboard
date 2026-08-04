@@ -677,6 +677,38 @@ export interface BreakdownSuggestion {
   }>;
 }
 
+export interface SeaCondition {
+  id: string;
+  sea_area_code: string;
+  sea_area_name: string;
+  target_month: number;
+  wave_height_limit: number | null;
+  wind_speed_limit: number | null;
+  turbidity_allowed: boolean;
+  navigation_restriction: string | null;
+  workable_days: number;
+  calendar_days: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface WorkabilityResult {
+  sea_area_code: string;
+  sea_area_name: string;
+  target_month: number;
+  workable_days_base: number;
+  workable_days: number;
+  calendar_days: number;
+  operation_rate: number;
+  conditions: {
+    wave_height_limit: number | null;
+    wind_speed_limit: number | null;
+    turbidity_allowed: boolean;
+    navigation_restriction: string | null;
+  };
+  warnings: string[];
+}
+
 export interface FetchJob {
   id: string;
   data_source_id: string;

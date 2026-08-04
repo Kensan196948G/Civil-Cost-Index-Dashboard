@@ -1,0 +1,12 @@
+tree_code,condition_json,resource_type,resource_name,resource_unit,quantity_per_unit,unit_price
+DREDGING,{},machinery,グラブ浚渫船 8m3,日,1,950000
+DREDGING,{},machinery,土運船 500m3,日,1,450000
+DREDGING,{},labor,普通作業員（船上）,人日,0.01,24000
+CAISSON,{},machinery,起重機船 150t吊,日,1,1200000
+CAISSON,{},machinery,台船・作業船,日,1,300000
+CAISSON,{},machinery,潜水士班,班日,1,250000
+CAISSON,{},labor,潜水士・潜水送気員,人日,1.2,25000
+RUBBLE_BASE,{},machinery,起重機船 150t吊,日,1,1200000
+RUBBLE_BASE,{},machinery,潜水士班,班日,1,250000
+RUBBLE_BASE,{},material,捨石（砕石）,m3,1.05,6500
+RUBBLE_BASE,{},labor,潜水士・潜水送気員,人日,0.3,25000

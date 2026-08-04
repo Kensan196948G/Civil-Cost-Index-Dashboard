@@ -1,5 +1,20 @@
 # リリースノート
 
+## Unreleased（2026-08-05: 正式係数データ投入・海象条件）
+
+- migration `010_sea_conditions.sql`: `port_sea_conditions`（海域×月の施工可能日数・作業限界波高/風速・航路制限）とサンプル海域（東京湾/大阪湾/伊勢湾）を追加
+- 係数データ投入（3経路）
+  - `POST /api/vessels/import`: 船舶マスタ（損料・供用係数・回航日数・待機率）のCSV/Excel一括取込
+  - `POST /api/estimation-bases/{id}/rates/import`: 諸経費率の一括取込（パーセント表記も自動変換）
+  - 歩掛の取込は既存の `/api/work-breakdowns/import` を使用
+  - 標準テンプレートを `data/samples/` に追加、手順書 `docs/coefficient-import.md` を新設
+- 海象条件・施工可能日数
+  - `GET/POST /api/port-models/sea-conditions`（登録・更新）
+  - `POST /api/port-models/workability`: 施工可能日数 → 稼働率の算定（波高・風速が作業限界を超えた場合は日数を減算し警告）
+  - `/estimates` の港湾オプションで海域・施工予定月を選ぶと稼働率を自動設定
+  - `/port` に海象条件一覧・算定・登録と船舶マスタ取込を追加
+- テスト117件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: Phase 5 港湾3工種の積算エンジン対応）
 
 - migration `009_port_estimating.sql`

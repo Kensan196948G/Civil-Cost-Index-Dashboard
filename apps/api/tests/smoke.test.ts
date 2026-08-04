@@ -519,4 +519,48 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
     expect(delProj.status).toBe(200);
   });
+
+  it("port sea conditions and workability", async () => {
+    const cond = await get("/api/port-models/sea-conditions?sea_area_code=SEA_TOKYO_BAY");
+    expect(cond.status).toBe(200);
+    expect(cond.body.data.sea_conditions).toHaveLength(12);
+    const work = await get("/api/port-models/workability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! },
+      body: JSON.stringify({ sea_area_code: "SEA_TOKYO_BAY", target_month: 8, wave_height: 1.5, wind_speed: 12 }),
+    });
+    expect(work.status).toBe(200);
+    expect(work.body.data.workability.operation_rate).toBeGreaterThan(0);
+    expect(work.body.data.workability.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("coefficient import validation reports errors", async () => {
+    const adminKey = process.env.ADMIN_API_KEY!;
+    const basesRes = await get("/api/estimation-bases");
+    const base = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "MLIT-2026");
+
+    const rateForm = new FormData();
+    rateForm.append("file", new Blob(["rate_type,rate,bad\ncommon_temp,0.1,1\nbad_type,0.2,2"], { type: "text/csv" }), "rates.csv");
+    const rateRes = await app!.fetch(new Request("http://localhost/api/estimation-bases/" + base.id + "/rates/import", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+      body: rateForm,
+    }), env);
+    expect(rateRes.status).toBe(200);
+    const rateBody = (await rateRes.json()) as { data: { result: { imported: number; errors: unknown[] } } };
+    expect(rateBody.data.result.imported).toBe(1);
+    expect(rateBody.data.result.errors.length).toBeGreaterThan(0);
+
+    const vesselForm = new FormData();
+    vesselForm.append("file", new Blob(["vessel_code,vessel_name,hire_rate_per_day\nBAD,,\n"], { type: "text/csv" }), "vessels.csv");
+    const vesselRes = await app!.fetch(new Request("http://localhost/api/vessels/import", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+      body: vesselForm,
+    }), env);
+    expect(vesselRes.status).toBe(200);
+    const vesselBody = (await vesselRes.json()) as { data: { result: { imported: number; errors: unknown[] } } };
+    expect(vesselBody.data.result.imported).toBe(0);
+    expect(vesselBody.data.result.errors.length).toBeGreaterThan(0);
+  });
 });

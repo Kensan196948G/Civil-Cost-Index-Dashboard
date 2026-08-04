@@ -63,6 +63,11 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | GET | `/api/estimates/{id}/export` | 積算書Excel（総括表/内訳/単価表） |
 | DELETE | `/api/estimates/{id}` | 積算結果削除 |
 | POST | `/api/ai/breakdown-suggest` | AI歩掛選定候補（要承認・金額は計算しない） |
+| POST | `/api/vessels/import` | 船舶マスタ一括取込（CSV/Excel・正式係数データ投入） |
+| GET | `/api/port-models/sea-conditions` | 海象条件一覧（`sea_area_code` 任意） |
+| POST | `/api/port-models/sea-conditions` | 海象条件の登録・更新（海域×月でUPSERT） |
+| POST | `/api/port-models/workability` | 海上施工可能日数・稼働率の算定（波高/風速超過時の減算含む） |
+| POST | `/api/estimation-bases/{id}/rates/import` | 諸経費率の一括取込（CSV/Excel） |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

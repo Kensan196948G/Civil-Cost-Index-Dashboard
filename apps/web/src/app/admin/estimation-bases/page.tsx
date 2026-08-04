@@ -23,6 +23,8 @@ export default function EstimationBasesPage() {
     applicable_from: "2026-04-01", status: "draft", source_type: "mlit_electronic",
     source_note: "", rounding_rules: "",
   });
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importBaseId, setImportBaseId] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +73,18 @@ export default function EstimationBasesPage() {
       await load();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "保存に失敗しました");
+    }
+  };
+
+  const doImportRates = async () => {
+    setNotice(null);
+    if (!importFile || !importBaseId) return;
+    try {
+      const res = await api.importOverheadRates(importFile, importBaseId);
+      setNotice(`諸経費率の取込完了: ${res.result.imported}件 ／ エラー ${res.result.errors.length}件`);
+      await load();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "取込に失敗しました");
     }
   };
 
@@ -197,6 +211,22 @@ export default function EstimationBasesPage() {
               </div>
             </div>
             <button onClick={() => void create()} className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">登録</button>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-2 text-base font-semibold">諸経費率の一括取込（3経路: 国交省電子化／書籍／既存システム）</h2>
+            <p className="mb-2 text-xs text-gray-500">
+              CSV/Excel列: rate_type（common_temp / site_management / general_management）, rate（0.15 または 15%）, applicable_from, applicable_to
+            </p>
+            <div className="flex items-center gap-3">
+              <select className={inputCls} value={importBaseId} onChange={(e) => setImportBaseId(e.target.value)}>
+                <option value="">基準を選択*</option>
+                {bases.map((b) => <option key={b.id} value={b.id}>{b.base_code} {b.base_name}</option>)}
+              </select>
+              <input type="file" accept=".csv,.xlsx" className="text-sm" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+              <button onClick={() => void doImportRates()} disabled={!importFile || !importBaseId} className="rounded-md bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50">
+                取込
+              </button>
+            </div>
           </div>
         </>
       )}

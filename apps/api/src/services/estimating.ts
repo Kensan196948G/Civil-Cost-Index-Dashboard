@@ -256,6 +256,45 @@ export async function upsertOverheadRate(
   return row.id;
 }
 
+export async function importOverheadRates(
+  sql: Sql,
+  input: { baseId: string; rows: CsvRow[] }
+): Promise<{ imported: number; errors: Array<{ row: number; column: string; reason: string }> }> {
+  const { baseId, rows } = input;
+  const base = await sql`SELECT id FROM estimation_bases WHERE id = ${baseId}`;
+  if (base.length === 0) {
+    const err = new Error("積算基準が見つかりません。");
+    (err as Error & { status?: number }).status = 404;
+    throw err;
+  }
+  const errors: Array<{ row: number; column: string; reason: string }> = [];
+  let imported = 0;
+  for (const [i, row] of rows.entries()) {
+    const rowNo = i + 2;
+    const rateType = headerValue(row, ["rate_type", "費目", "種別"]);
+    const rateRaw = headerValue(row, ["rate", "率"]);
+    const applicableFrom = headerValue(row, ["applicable_from", "適用開始"]);
+    const applicableTo = headerValue(row, ["applicable_to", "適用終了"]);
+    if (!["common_temp", "site_management", "general_management"].includes(rateType)) {
+      errors.push({ row: rowNo, column: "rate_type", reason: `rate_type は common_temp / site_management / general_management（入力: ${rateType}）` });
+      continue;
+    }
+    let rate = Number(rateRaw);
+    if (!Number.isFinite(rate)) {
+      errors.push({ row: rowNo, column: "rate", reason: "率が数値ではありません" });
+      continue;
+    }
+    if (rate > 1 && rate <= 100) rate = rate / 100; // パーセント表記の救済
+    await upsertOverheadRate(sql, baseId, rateType, {
+      rate,
+      applicable_from: applicableFrom || null,
+      applicable_to: applicableTo || null,
+    });
+    imported++;
+  }
+  return { imported, errors };
+}
+
 // ---- 工種体系 ----
 
 export async function listTrees(sql: Sql, baseId?: string) {

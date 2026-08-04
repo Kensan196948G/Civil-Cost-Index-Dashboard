@@ -275,6 +275,7 @@ cd apps/web && wrangler deploy          # Web 静的アセット Worker
 | [バックアップ・リストア手順書](docs/backup-restore.md) | バックアップ方針・復旧手順 |
 | [リリースノート](docs/release-notes.md) | バージョン履歴・既知の制限 |
 | [外部評価の検証結果と対応方針（2026-08-04）](docs/evaluation-response-2026-08-04.md) | 評価の裏取り・実施済み対応・今後のロードマップ |
+| [正式な土木建設専用積算システム拡張仕様書](docs/estimating-system-spec.md) | 積算エンジン・歩掛・諸経費・港湾対応・AI候補生成の全体仕様（構想） |
 
 ## 🔒 セキュリティ
 

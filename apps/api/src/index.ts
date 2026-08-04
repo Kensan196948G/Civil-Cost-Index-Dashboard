@@ -27,7 +27,7 @@ import { buildEstimateLinkXlsx } from "./services/exportEstimateLink";
 import { buildPptxExport } from "./services/exportPptx";
 import { buildPdfExport, getCjkFontBytes } from "./services/exportPdf";
 import { parsePeriod } from "./lib/stats";
-import { getAiProviderInfo } from "./lib/ai";
+import { getAiProviderInfo, getAvailableProviders } from "./lib/ai";
 import { buildMarketSummary, type Audience } from "./services/aiSummary";
 import { explainAlerts } from "./services/aiAlerts";
 import { generateReport, REPORT_TYPE_LABELS, type ReportType } from "./services/aiReport";
@@ -1052,6 +1052,8 @@ app.get("/api/ai/status", (c) => {
     ai_enabled: info.provider !== "none",
     provider: info.provider,
     model: info.model,
+    providers: getAvailableProviders(c.env),
+    provider_label: info.provider === "none" ? "未設定" : getAvailableProviders(c.env).find((p) => p.provider === info.provider)?.label ?? info.provider,
     features: ["summary", "alert_explain", "report", "quality", "templates", "audit"],
   });
 });

@@ -14,9 +14,17 @@ export type Env = {
   FETCH_ALLOWED_HOSTS?: string;
   /** 任意: Anthropic APIキー。設定時はAnthropicを優先使用。 */
   ANTHROPIC_API_KEY?: string;
+  /** 任意: DeepSeek APIキー（OpenAI互換API）。コスト重視タスクの既定推奨。 */
+  DEEPSEEK_API_KEY?: string;
+  /** 任意: DeepSeekモデル（既定: deepseek-chat） */
+  DEEPSEEK_MODEL?: string;
+  /** 任意: Perplexity APIキー（OpenAI互換API）。最新情報調査向け。 */
+  PERPLEXITY_API_KEY?: string;
+  /** 任意: Perplexityモデル（既定: sonar） */
+  PERPLEXITY_MODEL?: string;
   /** 任意: 使用モデルの上書き（例: claude-opus-5 / @cf/meta/llama-3.3-70b-instruct-fp8-fast） */
   AI_MODEL?: string;
-  /** 任意: AIプロバイダーの強制指定 anthropic / workers-ai / none */
+  /** 任意: AIプロバイダーの強制指定 anthropic / deepseek / perplexity / workers-ai / none */
   AI_PROVIDER?: string;
   /** Workers AI バインディング（Workersデプロイ時のみ） */
   AI?: WorkersAiBinding;

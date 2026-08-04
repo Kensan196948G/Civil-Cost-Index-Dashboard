@@ -119,8 +119,13 @@ systemd ユニット `cci.service` を登録済み（起動時自動起動）。
 | 環境変数 / バインディング | 内容 |
 | --- | --- |
 | `ANTHROPIC_API_KEY`（Secret） | 設定時は Anthropic API（claude-opus-5）を使用 |
+| `DEEPSEEK_API_KEY`（Secret） | DeepSeek API（deepseek-chat・OpenAI互換）。コスト重視タスクの既定推奨 |
+| `PERPLEXITY_API_KEY`（Secret） | Perplexity API（sonar・最新情報調査向け） |
 | Workers AI バインディング `AI` | APIキー不要のフォールバック（@cf/meta/llama-3.3-70b-instruct-fp8-fast） |
-| `AI_MODEL` / `AI_PROVIDER` | モデル・プロバイダーの上書き（`none` でAI無効化） |
+| `AI_MODEL` / `AI_PROVIDER` | モデル・プロバイダーの上書き（`anthropic` / `deepseek` / `perplexity` / `workers-ai` / `none`） |
+
+プロバイダー優先順位（未指定時）: Anthropic → DeepSeek → Perplexity → Workers AI → ルール生成。
+`/api/ai/status` で設定状況と選択中プロバイダーを確認できます。
 
 Phase 2〜4（データ品質拡張・自然言語検索/RAG・予測/案件影響）のロードマップは [AI拡張ロードマップ](docs/ai-roadmap.md) を参照してください。
 

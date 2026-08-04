@@ -1,5 +1,13 @@
 # リリースノート
 
+## Unreleased（2026-08-05: AIプロバイダー拡張）
+
+- DeepSeek（`DEEPSEEK_API_KEY`・`deepseek-chat`）と Perplexity（`PERPLEXITY_API_KEY`・`sonar`）をAIプロバイダーへ追加
+- OpenAI互換の chat completions API に対応し、`AI_PROVIDER` で強制指定可能
+- プロバイダー優先順位（未指定時）: Anthropic → DeepSeek → Perplexity → Workers AI → ルール生成
+- `/api/ai/status` に `providers`（設定状況・モデル一覧）と `provider_label` を追加
+- テスト106件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: 残タスク対応・ルートReact化）
 
 前日の対応で残った項目を実装。

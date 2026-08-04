@@ -498,7 +498,15 @@ describe.skipIf(!hasDb)("integration smoke", () => {
         project_id: projectId,
         base_id: portBase.id,
         name: "スモーク港湾積算",
-        port_options: { operation_rate: 0.7, mobilization_days: 3, soil_correction: 0.1, night_surcharge: 0 },
+        port_options: {
+          operation_rate: 0.7,
+          mobilization_days: 3,
+          soil_correction: 0,
+          night_surcharge: 0,
+          soil_type_code: "CLAY",
+          spoil_ground_code: "SEA_DUMP_A",
+          transport_distance_km: 15,
+        },
       }),
     });
     expect(calc.status).toBe(201);
@@ -506,6 +514,9 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(estimate.port_options).not.toBeNull();
     expect(estimate.port_extras.work_days).toBe(26); // グラブ10日 + 土運船16日
     expect(estimate.port_extras.mobilization_cost).toBe(4200000); // 3日×(950,000+450,000)
+    expect(estimate.port_extras.soil_factor).toBe(1.15);
+    expect(estimate.port_extras.transport_coefficient).toBe(1.08);
+    expect(estimate.port_extras.disposal_cost).toBe(6720000);
     expect(estimate.total).toBeGreaterThan(0);
     expect(estimate.materials.some((m: { resource_name: string }) => m.resource_name.includes("グラブ浚渫船"))).toBe(true);
 

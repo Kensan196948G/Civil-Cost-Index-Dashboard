@@ -68,6 +68,12 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | POST | `/api/port-models/sea-conditions` | 海象条件の登録・更新（海域×月でUPSERT） |
 | POST | `/api/port-models/workability` | 海上施工可能日数・稼働率の算定（波高/風速超過時の減算含む） |
 | POST | `/api/estimation-bases/{id}/rates/import` | 諸経費率の一括取込（CSV/Excel） |
+| GET | `/api/port-models/soil-types` | 土質マスタ（浚渫土質補正係数） |
+| POST | `/api/port-models/soil-types` | 土質マスタ登録・更新 |
+| GET | `/api/port-models/transport-rates` | 運搬距離別係数マスタ |
+| POST | `/api/port-models/transport-rates` | 運搬距離係数登録・更新 |
+| GET | `/api/port-models/spoil-grounds` | 土捨場・処分場マスタ |
+| POST | `/api/port-models/spoil-grounds` | 土捨場・処分場登録・更新 |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |
@@ -288,6 +294,10 @@ PoC用の簡易モデルです。作業船ごとに:
 待機日数 = ceil(稼働日数 × (1 - 供用係数))、船舶損料 = (稼働日数+待機日数) × 損料単価、
 回航・えい航費 = 回航日数 × 損料単価。土質補正・夜間補正は直接工事費へ適用され、
 結果は `estimate.port_options` / `estimate.port_extras` に保存されます。
+
+浚渫では `soil_type_code` / `spoil_ground_code` / `transport_distance_km` を指定すると、
+土質補正係数・土捨場の処分単価・運搬距離係数をマスタから自動解決して直接工事費へ反映します。
+`port_extras` に `soil_factor` / `transport_coefficient` / `disposal_cost` が保存されます。
 
 ## POST /api/projects/{id}/simulate
 

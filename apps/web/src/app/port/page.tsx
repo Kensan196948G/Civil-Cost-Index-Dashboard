@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { formatNumber } from "@/lib/utils";
-import type { PortEstimate, PortWorkType, SeaCondition, Vessel, WorkabilityResult } from "@/types/api";
+import type { PortEstimate, PortWorkType, SeaCondition, SoilType, SpoilGround, TransportRate, Vessel, WorkabilityResult } from "@/types/api";
 
 export default function PortPage() {
   const [workTypes, setWorkTypes] = useState<PortWorkType[]>([]);
@@ -15,6 +15,12 @@ export default function PortPage() {
   const [workability, setWorkability] = useState<WorkabilityResult | null>(null);
   const [seaForm, setSeaForm] = useState({ sea_area_code: "SEA_TOKYO_BAY", sea_area_name: "東京湾", target_month: "1", workable_days: "20" });
   const [importVesselFile, setImportVesselFile] = useState<File | null>(null);
+  const [soilTypes, setSoilTypes] = useState<SoilType[]>([]);
+  const [transportRates, setTransportRates] = useState<TransportRate[]>([]);
+  const [spoilGrounds, setSpoilGrounds] = useState<SpoilGround[]>([]);
+  const [masterForm, setMasterForm] = useState({
+    kind: "soil", code: "", name: "", factor: "1.0", distance: "10", price: "0", note: "",
+  });
   const [workTypeId, setWorkTypeId] = useState("");
   const [quantity, setQuantity] = useState("10000");
   const [operationRate, setOperationRate] = useState("0.7");
@@ -29,10 +35,16 @@ export default function PortPage() {
     setLoading(true);
     setError(null);
     try {
-      const [w, v, s] = await Promise.all([api.portWorkTypes(), api.portVessels(), api.seaConditions()]);
+      const [w, v, s, soil, tr, sg] = await Promise.all([
+        api.portWorkTypes(), api.portVessels(), api.seaConditions(),
+        api.soilTypes(), api.transportRates(), api.spoilGrounds(),
+      ]);
       setWorkTypes(w.work_types);
       setVessels(v.vessels);
       setSeaConditions(s.sea_conditions);
+      setSoilTypes(soil.soil_types);
+      setTransportRates(tr.transport_rates);
+      setSpoilGrounds(sg.spoil_grounds);
       if (!workTypeId && w.work_types[0]) setWorkTypeId(w.work_types[0].id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "不明なエラー");
@@ -103,6 +115,26 @@ export default function PortPage() {
       setVessels(v.vessels);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "取込に失敗しました");
+    }
+  };
+
+  const saveMaster = async () => {
+    setNotice(null);
+    try {
+      if (masterForm.kind === "soil") {
+        await api.upsertSoilType({ soil_code: masterForm.code, soil_name: masterForm.name, dredging_correction_factor: Number(masterForm.factor), note: masterForm.note || null });
+      } else if (masterForm.kind === "transport") {
+        await api.upsertTransportRate({ distance_km: Number(masterForm.distance), transport_coefficient: Number(masterForm.factor), note: masterForm.note || null });
+      } else {
+        await api.upsertSpoilGround({ spoil_code: masterForm.code, spoil_name: masterForm.name, distance_km: masterForm.distance ? Number(masterForm.distance) : null, disposal_unit_price: Number(masterForm.price), note: masterForm.note || null });
+      }
+      setNotice("マスタを登録しました。");
+      const [soil, tr, sg] = await Promise.all([api.soilTypes(), api.transportRates(), api.spoilGrounds()]);
+      setSoilTypes(soil.soil_types);
+      setTransportRates(tr.transport_rates);
+      setSpoilGrounds(sg.spoil_grounds);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "登録に失敗しました");
     }
   };
 
@@ -226,6 +258,54 @@ export default function PortPage() {
               <button onClick={() => void doImportVessels()} disabled={!importVesselFile} className="rounded-md bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50">
                 取込
               </button>
+            </div>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-2 text-base font-semibold">浚渫条件マスタ（土質・運搬距離・土捨場）</h2>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div>
+                <h3 className="mb-1 text-sm font-semibold">土質</h3>
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b text-left text-gray-500"><th className="py-1">土質</th><th>補正係数</th></tr></thead>
+                  <tbody>
+                    {soilTypes.map((s) => <tr key={s.id} className="border-b border-gray-100"><td className="py-1">{s.soil_name}</td><td className="py-1">×{s.dredging_correction_factor}</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h3 className="mb-1 text-sm font-semibold">運搬距離係数</h3>
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b text-left text-gray-500"><th className="py-1">距離</th><th>係数</th></tr></thead>
+                  <tbody>
+                    {transportRates.map((t) => <tr key={t.id} className="border-b border-gray-100"><td className="py-1">{t.distance_km}km以下</td><td className="py-1">×{t.transport_coefficient}</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h3 className="mb-1 text-sm font-semibold">土捨場・処分場</h3>
+                <table className="w-full text-xs">
+                  <thead><tr className="border-b text-left text-gray-500"><th className="py-1">名称</th><th>処分単価</th></tr></thead>
+                  <tbody>
+                    {spoilGrounds.map((s) => <tr key={s.id} className="border-b border-gray-100"><td className="py-1">{s.spoil_name}</td><td className="py-1">{s.disposal_unit_price}円/m3</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-7">
+              <select className={inputCls} value={masterForm.kind} onChange={(e) => setMasterForm({ ...masterForm, kind: e.target.value })}>
+                <option value="soil">土質</option>
+                <option value="transport">運搬距離</option>
+                <option value="spoil">土捨場</option>
+              </select>
+              <input className={inputCls} placeholder="コード*" value={masterForm.code} onChange={(e) => setMasterForm({ ...masterForm, code: e.target.value })} />
+              <input className={inputCls} placeholder="名称*" value={masterForm.name} onChange={(e) => setMasterForm({ ...masterForm, name: e.target.value })} />
+              <input className={inputCls} placeholder="係数/距離" value={masterForm.factor} onChange={(e) => setMasterForm({ ...masterForm, factor: e.target.value })} />
+              <input className={inputCls} placeholder="距離(km)" value={masterForm.distance} onChange={(e) => setMasterForm({ ...masterForm, distance: e.target.value })} />
+              <input className={inputCls} placeholder="処分単価" value={masterForm.price} onChange={(e) => setMasterForm({ ...masterForm, price: e.target.value })} />
+              <button onClick={() => void saveMaster()} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700">登録</button>
+            </div>
+            <div className="mt-1 text-xs text-gray-500">
+              土質: コード/名称/補正係数（factor）／運搬距離: 距離をfactorに入力／土捨場: コード/名称/処分単価（distanceは距離）
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">

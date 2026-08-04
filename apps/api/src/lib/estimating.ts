@@ -51,6 +51,15 @@ export type PortOptions = {
   mobilization_days?: number | null;
   soil_correction: number;
   night_surcharge: number;
+  /** 土質補正係数（マスタ由来・乗算） */
+  soil_factor?: number;
+  /** 運搬距離補正係数（マスタ由来・乗算） */
+  transport_coefficient?: number;
+  /** 土捨場・処分場の処分単価（円/m3） */
+  spoil_unit_price?: number;
+  soil_type_code?: string | null;
+  spoil_ground_code?: string | null;
+  transport_distance_km?: number | null;
 };
 
 export type PortExtras = {
@@ -61,6 +70,12 @@ export type PortExtras = {
   mobilization_cost: number;
   soil_correction: number;
   night_surcharge: number;
+  soil_factor: number;
+  transport_coefficient: number;
+  soil_type_code: string | null;
+  spoil_ground_code: string | null;
+  transport_distance_km: number | null;
+  disposal_cost: number;
 };
 
 export type EstimateLineResult = {
@@ -175,6 +190,7 @@ export function computeEstimate(input: {
   let portWorkDays = 0;
   let portStandbyDays = 0;
   let portMobilizationCost = 0;
+  let disposalCost = 0;
 
   for (const q of input.quantities) {
     const candidates = input.breakdownsByTree.get(q.tree_id) ?? [];
@@ -260,8 +276,14 @@ export function computeEstimate(input: {
   const port = input.port ?? null;
   if (port) {
     const laborSum = lines.reduce((a, l) => a + l.labor_cost, 0);
-    if (port.soil_correction) directRaw = directRaw * (1 + port.soil_correction);
+    const soilFactor = port.soil_factor ?? 1;
+    const transportCoefficient = port.transport_coefficient ?? 1;
+    directRaw = directRaw * soilFactor * transportCoefficient * (1 + port.soil_correction);
     if (port.night_surcharge) directRaw = directRaw + laborSum * port.night_surcharge;
+    if (port.spoil_unit_price) {
+      disposalCost = input.quantities.reduce((a, q) => a + q.quantity, 0) * port.spoil_unit_price;
+      directRaw = directRaw + disposalCost;
+    }
   }
   const directCost = applyRounding(directRaw, input.rounding.direct_cost);
   const commonTempCost = applyRounding(
@@ -292,6 +314,12 @@ export function computeEstimate(input: {
         mobilization_cost: portMobilizationCost,
         soil_correction: port.soil_correction,
         night_surcharge: port.night_surcharge,
+        soil_factor: port.soil_factor ?? 1,
+        transport_coefficient: port.transport_coefficient ?? 1,
+        soil_type_code: port.soil_type_code ?? null,
+        spoil_ground_code: port.spoil_ground_code ?? null,
+        transport_distance_km: port.transport_distance_km ?? null,
+        disposal_cost: disposalCost,
       }
     : null;
 

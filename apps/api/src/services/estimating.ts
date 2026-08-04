@@ -11,6 +11,7 @@ import {
 } from "../lib/estimating";
 import { generateAiText } from "../lib/ai";
 import type { CsvRow } from "../lib/csv";
+import { resolveDredgingOptions } from "./portModels";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB driver boundary
 type DbRow = Record<string, any>;
@@ -639,6 +640,26 @@ export async function calculateEstimate(
     });
     breakdownsByTree.set(String(b.tree_id), list);
   }
+  let port: PortOptions | null = null;
+  if (base.category === "port") {
+    const dredge = await resolveDredgingOptions(sql, {
+      soil_type_code: portOptions?.soil_type_code ?? null,
+      spoil_ground_code: portOptions?.spoil_ground_code ?? null,
+      transport_distance_km: portOptions?.transport_distance_km ?? null,
+    });
+    port = {
+      operation_rate: portOptions?.operation_rate ?? 0.7,
+      mobilization_days: portOptions?.mobilization_days ?? null,
+      soil_correction: portOptions?.soil_correction ?? 0,
+      night_surcharge: portOptions?.night_surcharge ?? 0,
+      soil_factor: dredge.soil_factor,
+      soil_type_code: dredge.soil_type_code,
+      spoil_unit_price: dredge.spoil_unit_price,
+      spoil_ground_code: dredge.spoil_ground_code,
+      transport_coefficient: dredge.transport_coefficient,
+      transport_distance_km: dredge.transport_distance_km,
+    };
+  }
   const result = computeEstimate({
     quantities: quantities.map((q) => ({
       tree_id: String(q.tree_id),
@@ -653,25 +674,8 @@ export async function calculateEstimate(
     rounding: base.rounding_rules,
     taxRate: 0.1,
     vessels: base.category === "port" ? await loadVesselsMap(sql) : undefined,
-    port:
-      base.category === "port"
-        ? {
-            operation_rate: portOptions?.operation_rate ?? 0.7,
-            mobilization_days: portOptions?.mobilization_days ?? null,
-            soil_correction: portOptions?.soil_correction ?? 0,
-            night_surcharge: portOptions?.night_surcharge ?? 0,
-          }
-        : undefined,
+    port: port ?? undefined,
   });
-  const port =
-    base.category === "port"
-      ? {
-          operation_rate: portOptions?.operation_rate ?? 0.7,
-          mobilization_days: portOptions?.mobilization_days ?? null,
-          soil_correction: portOptions?.soil_correction ?? 0,
-          night_surcharge: portOptions?.night_surcharge ?? 0,
-        }
-      : null;
 
   const [header] = await sql`
     INSERT INTO estimate_headers

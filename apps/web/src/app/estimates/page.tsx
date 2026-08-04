@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { formatNumber, formatDateTime, downloadFile } from "@/lib/utils";
-import type { BreakdownSuggestion, EstimationBase, EstimateDetail, EstimateSummary, ProjectSummary, SeaCondition } from "@/types/api";
+import type { BreakdownSuggestion, EstimationBase, EstimateDetail, EstimateSummary, ProjectSummary, SeaCondition, SoilType, SpoilGround } from "@/types/api";
 
 export default function EstimatesPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -17,11 +17,16 @@ export default function EstimatesPage() {
     mobilization_days: "",
     soil_correction: "0",
     night_surcharge: "0",
+    soil_type_code: "",
+    spoil_ground_code: "",
+    transport_distance_km: "",
   });
   const [seaOptions, setSeaOptions] = useState<SeaCondition[]>([]);
   const [seaArea, setSeaArea] = useState("");
   const [seaMonth, setSeaMonth] = useState("8");
   const [seaNote, setSeaNote] = useState("");
+  const [soilOptions, setSoilOptions] = useState<SoilType[]>([]);
+  const [spoilOptions, setSpoilOptions] = useState<SpoilGround[]>([]);
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
   const [detail, setDetail] = useState<EstimateDetail | null>(null);
   const [suggestion, setSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -57,14 +62,18 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (selectedBase?.category !== "port") return;
-    void api.seaConditions().then((r) => {
-      setSeaOptions(r.sea_conditions);
-      const first = r.sea_conditions[0];
-      if (first) {
-        setSeaArea(first.sea_area_code);
-        void applyWorkability(first.sea_area_code, Number(seaMonth));
-      }
-    }).catch(() => undefined);
+    void Promise.all([api.seaConditions(), api.soilTypes(), api.spoilGrounds()])
+      .then(([s, soil, spoil]) => {
+        setSeaOptions(s.sea_conditions);
+        setSoilOptions(soil.soil_types);
+        setSpoilOptions(spoil.spoil_grounds);
+        const first = s.sea_conditions[0];
+        if (first) {
+          setSeaArea(first.sea_area_code);
+          void applyWorkability(first.sea_area_code, Number(seaMonth));
+        }
+      })
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseId]);
 
@@ -96,6 +105,9 @@ export default function EstimatesPage() {
                 mobilization_days: portForm.mobilization_days ? Number(portForm.mobilization_days) : null,
                 soil_correction: Number(portForm.soil_correction),
                 night_surcharge: Number(portForm.night_surcharge),
+                soil_type_code: portForm.soil_type_code || null,
+                spoil_ground_code: portForm.spoil_ground_code || null,
+                transport_distance_km: portForm.transport_distance_km ? Number(portForm.transport_distance_km) : null,
               },
             }
           : {}),
@@ -206,6 +218,24 @@ export default function EstimatesPage() {
               <label className={labelCls}>夜間・交代制補正（%）</label>
               <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" step={1} value={portForm.night_surcharge} onChange={(e) => setPortForm({ ...portForm, night_surcharge: e.target.value })} />
             </div>
+            <div>
+              <label className={labelCls}>土質</label>
+              <select className="w-36 rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={portForm.soil_type_code} onChange={(e) => setPortForm({ ...portForm, soil_type_code: e.target.value })}>
+                <option value="">指定なし</option>
+                {soilOptions.map((s) => <option key={s.id} value={s.soil_code}>{s.soil_name}（×{s.dredging_correction_factor}）</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>土捨場・処分場</label>
+              <select className="w-44 rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={portForm.spoil_ground_code} onChange={(e) => setPortForm({ ...portForm, spoil_ground_code: e.target.value })}>
+                <option value="">指定なし</option>
+                {spoilOptions.map((s) => <option key={s.id} value={s.spoil_code}>{s.spoil_name}（{s.disposal_unit_price}円/m3）</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>運搬距離（km）</label>
+              <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" min={0} value={portForm.transport_distance_km} onChange={(e) => setPortForm({ ...portForm, transport_distance_km: e.target.value })} />
+            </div>
             <span className="text-xs text-blue-700">港湾: 船舶損料・供用係数・回航費・拘束費を自動算定</span>
             {seaNote && <div className="w-full text-xs text-blue-700">{seaNote}</div>}
           </div>
@@ -268,8 +298,11 @@ export default function EstimatesPage() {
                         <div>回航日数: {detail.port_options.mobilization_days ?? "マスタ値"}</div>
                         <div>土質補正: {detail.port_options.soil_correction}</div>
                         <div>夜間補正: {detail.port_options.night_surcharge}</div>
+                        <div>土質係数: {detail.port_options.soil_factor ?? 1}</div>
+                        <div>運搬係数: {detail.port_options.transport_coefficient ?? 1}</div>
                         <div>稼働日数: {detail.port_extras?.work_days ?? 0}日</div>
                         <div>待機・拘束: {detail.port_extras?.standby_days ?? 0}日</div>
+                        <div>処分費: {money(detail.port_extras?.disposal_cost ?? 0)}円</div>
                         <div className="col-span-2">回航・えい航費: {money(detail.port_extras?.mobilization_cost ?? 0)}円</div>
                       </div>
                     </div>

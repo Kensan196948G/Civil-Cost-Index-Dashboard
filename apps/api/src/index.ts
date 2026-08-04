@@ -91,8 +91,17 @@ import {
   listSeaConditions,
   upsertSeaCondition,
   computeWorkability,
+  listSoilTypes,
+  upsertSoilType,
+  listTransportRates,
+  upsertTransportRate,
+  listSpoilGrounds,
+  upsertSpoilGround,
   portEstimateSchema,
   seaConditionSchema,
+  soilTypeSchema,
+  transportRateSchema,
+  spoilGroundSchema,
 } from "./services/portModels";
 import {
   listEstimationBases,
@@ -1138,6 +1147,54 @@ app.post("/api/port-models/workability", async (c) => {
   }
 });
 
+app.get("/api/port-models/soil-types", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { soil_types: await listSoilTypes(sql) });
+});
+
+app.post("/api/port-models/soil-types", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = soilTypeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  const id = await upsertSoilType(sql, parsed.data);
+  await recordAudit(sql, identity, "soil_type.upsert", "soil_type", String(id));
+  return ok(c, { soil_type_id: id });
+});
+
+app.get("/api/port-models/transport-rates", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { transport_rates: await listTransportRates(sql) });
+});
+
+app.post("/api/port-models/transport-rates", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = transportRateSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  const id = await upsertTransportRate(sql, parsed.data);
+  await recordAudit(sql, identity, "transport_rate.upsert", "transport_rate", String(id));
+  return ok(c, { transport_rate_id: id });
+});
+
+app.get("/api/port-models/spoil-grounds", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { spoil_grounds: await listSpoilGrounds(sql) });
+});
+
+app.post("/api/port-models/spoil-grounds", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = spoilGroundSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  const id = await upsertSpoilGround(sql, parsed.data);
+  await recordAudit(sql, identity, "spoil_ground.upsert", "spoil_ground", String(id));
+  return ok(c, { spoil_ground_id: id });
+});
+
 // ---- 積算エンジン（Phase 4） ----
 
 const ESTIMATE_WRITE_ROLES = ["data_ingester", "data_approver", "estimator", "estimating_manager", "system_admin"];
@@ -1360,6 +1417,9 @@ app.post("/api/estimates/calculate", async (c) => {
           mobilization_days: z.number().int().min(0).max(60).optional().nullable(),
           soil_correction: z.number().min(-0.5).max(2).optional(),
           night_surcharge: z.number().min(0).max(2).optional(),
+          soil_type_code: z.string().optional().nullable(),
+          spoil_ground_code: z.string().optional().nullable(),
+          transport_distance_km: z.number().min(0).optional().nullable(),
         })
         .optional(),
     })

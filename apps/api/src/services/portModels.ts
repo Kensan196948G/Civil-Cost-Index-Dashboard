@@ -278,3 +278,128 @@ export async function computeWorkability(
     warnings,
   };
 }
+
+export const soilTypeSchema = z.object({
+  soil_code: z.string().min(1).max(50),
+  soil_name: z.string().min(1).max(200),
+  dredging_correction_factor: z.number().min(0.5).max(3).default(1),
+  note: z.string().optional().nullable(),
+});
+
+export const transportRateSchema = z.object({
+  distance_km: z.number().positive(),
+  transport_coefficient: z.number().min(0.5).max(3).default(1),
+  note: z.string().optional().nullable(),
+});
+
+export const spoilGroundSchema = z.object({
+  spoil_code: z.string().min(1).max(50),
+  spoil_name: z.string().min(1).max(200),
+  area_name: z.string().max(200).optional().nullable(),
+  distance_km: z.number().nonnegative().optional().nullable(),
+  disposal_unit_price: z.number().nonnegative().default(0),
+  note: z.string().optional().nullable(),
+});
+
+export async function listSoilTypes(sql: Sql) {
+  return sql`SELECT id, soil_code, soil_name, dredging_correction_factor, note, updated_at FROM soil_types ORDER BY soil_code`;
+}
+
+export async function upsertSoilType(sql: Sql, input: z.infer<typeof soilTypeSchema>) {
+  const [row] = await sql`
+    INSERT INTO soil_types (soil_code, soil_name, dredging_correction_factor, note)
+    VALUES (${input.soil_code}, ${input.soil_name}, ${input.dredging_correction_factor}, ${input.note ?? null})
+    ON CONFLICT (soil_code) DO UPDATE SET
+      soil_name = EXCLUDED.soil_name,
+      dredging_correction_factor = EXCLUDED.dredging_correction_factor,
+      note = EXCLUDED.note,
+      updated_at = now()
+    RETURNING id
+  `;
+  return row.id;
+}
+
+export async function listTransportRates(sql: Sql) {
+  return sql`SELECT id, distance_km, transport_coefficient, note, updated_at FROM dredging_transport_rates ORDER BY distance_km`;
+}
+
+export async function upsertTransportRate(sql: Sql, input: z.infer<typeof transportRateSchema>) {
+  const [row] = await sql`
+    INSERT INTO dredging_transport_rates (distance_km, transport_coefficient, note)
+    VALUES (${input.distance_km}, ${input.transport_coefficient}, ${input.note ?? null})
+    ON CONFLICT (distance_km) DO UPDATE SET
+      transport_coefficient = EXCLUDED.transport_coefficient,
+      note = EXCLUDED.note,
+      updated_at = now()
+    RETURNING id
+  `;
+  return row.id;
+}
+
+export async function listSpoilGrounds(sql: Sql) {
+  return sql`SELECT id, spoil_code, spoil_name, area_name, distance_km, disposal_unit_price, note, updated_at FROM spoil_grounds ORDER BY spoil_code`;
+}
+
+export async function upsertSpoilGround(sql: Sql, input: z.infer<typeof spoilGroundSchema>) {
+  const [row] = await sql`
+    INSERT INTO spoil_grounds (spoil_code, spoil_name, area_name, distance_km, disposal_unit_price, note)
+    VALUES (${input.spoil_code}, ${input.spoil_name}, ${input.area_name ?? null},
+            ${input.distance_km ?? null}, ${input.disposal_unit_price}, ${input.note ?? null})
+    ON CONFLICT (spoil_code) DO UPDATE SET
+      spoil_name = EXCLUDED.spoil_name,
+      area_name = EXCLUDED.area_name,
+      distance_km = EXCLUDED.distance_km,
+      disposal_unit_price = EXCLUDED.disposal_unit_price,
+      note = EXCLUDED.note,
+      updated_at = now()
+    RETURNING id
+  `;
+  return row.id;
+}
+
+export async function resolveDredgingOptions(
+  sql: Sql,
+  opts: {
+    soil_type_code?: string | null;
+    spoil_ground_code?: string | null;
+    transport_distance_km?: number | null;
+  }
+): Promise<{
+  soil_factor: number;
+  soil_type_code: string | null;
+  spoil_unit_price: number;
+  spoil_ground_code: string | null;
+  transport_coefficient: number;
+  transport_distance_km: number | null;
+}> {
+  let soilFactor = 1;
+  const soilTypeCode: string | null = opts.soil_type_code ?? null;
+  if (opts.soil_type_code) {
+    const rows = await sql`SELECT dredging_correction_factor FROM soil_types WHERE soil_code = ${opts.soil_type_code}`;
+    if (rows.length > 0) soilFactor = Number(rows[0].dredging_correction_factor);
+  }
+  let spoilUnitPrice = 0;
+  const spoilGroundCode: string | null = opts.spoil_ground_code ?? null;
+  if (opts.spoil_ground_code) {
+    const rows = await sql`SELECT disposal_unit_price FROM spoil_grounds WHERE spoil_code = ${opts.spoil_ground_code}`;
+    if (rows.length > 0) spoilUnitPrice = Number(rows[0].disposal_unit_price);
+  }
+  let transportCoefficient = 1;
+  const distanceKm = opts.transport_distance_km ?? null;
+  if (distanceKm != null) {
+    const rows = await sql`
+      SELECT transport_coefficient FROM dredging_transport_rates
+      WHERE distance_km <= ${distanceKm}
+      ORDER BY distance_km DESC LIMIT 1
+    `;
+    if (rows.length > 0) transportCoefficient = Number(rows[0].transport_coefficient);
+  }
+  return {
+    soil_factor: soilFactor,
+    soil_type_code: soilTypeCode,
+    spoil_unit_price: spoilUnitPrice,
+    spoil_ground_code: spoilGroundCode,
+    transport_coefficient: transportCoefficient,
+    transport_distance_km: distanceKm,
+  };
+}

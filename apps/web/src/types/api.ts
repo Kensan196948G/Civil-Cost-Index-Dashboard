@@ -650,6 +650,12 @@ export interface EstimateDetail extends EstimateSummary {
     mobilization_days: number | null;
     soil_correction: number;
     night_surcharge: number;
+    soil_factor?: number;
+    transport_coefficient?: number;
+    spoil_unit_price?: number;
+    soil_type_code?: string | null;
+    spoil_ground_code?: string | null;
+    transport_distance_km?: number | null;
   } | null;
   port_extras: {
     operation_rate: number;
@@ -659,6 +665,12 @@ export interface EstimateDetail extends EstimateSummary {
     mobilization_cost: number;
     soil_correction: number;
     night_surcharge: number;
+    soil_factor: number;
+    transport_coefficient: number;
+    soil_type_code: string | null;
+    spoil_ground_code: string | null;
+    transport_distance_km: number | null;
+    disposal_cost: number;
   } | null;
   lines: EstimateLine[];
   materials: EstimateMaterial[];
@@ -707,6 +719,34 @@ export interface WorkabilityResult {
     navigation_restriction: string | null;
   };
   warnings: string[];
+}
+
+export interface SoilType {
+  id: string;
+  soil_code: string;
+  soil_name: string;
+  dredging_correction_factor: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface TransportRate {
+  id: string;
+  distance_km: number;
+  transport_coefficient: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface SpoilGround {
+  id: string;
+  spoil_code: string;
+  spoil_name: string;
+  area_name: string | null;
+  distance_km: number | null;
+  disposal_unit_price: number;
+  note: string | null;
+  updated_at: string;
 }
 
 export interface FetchJob {

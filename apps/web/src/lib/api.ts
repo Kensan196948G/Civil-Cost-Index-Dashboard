@@ -40,6 +40,8 @@ import type {
   SimulationRequest,
   SimulationResult,
   SeaCondition,
+  SoilType,
+  SpoilGround,
   StagedIngestion,
   TimeseriesParams,
   TimeseriesResponse,
@@ -49,6 +51,7 @@ import type {
   WorkBreakdownInput,
   WorkTypeTree,
   WorkabilityResult,
+  TransportRate,
 } from "@/types/api";
 import { loadPrefs } from "@/lib/utils";
 
@@ -227,6 +230,9 @@ export const api = {
       mobilization_days?: number | null;
       soil_correction?: number;
       night_surcharge?: number;
+      soil_type_code?: string | null;
+      spoil_ground_code?: string | null;
+      transport_distance_km?: number | null;
     };
   }) =>
     request<{ estimate: EstimateDetail }>("/api/estimates/calculate", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
@@ -274,6 +280,15 @@ export const api = {
       body: fd,
     });
   },
+  soilTypes: () => request<{ soil_types: SoilType[] }>("/api/port-models/soil-types"),
+  upsertSoilType: (input: { soil_code: string; soil_name: string; dredging_correction_factor: number; note?: string | null }) =>
+    request<{ soil_type_id: string }>("/api/port-models/soil-types", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  transportRates: () => request<{ transport_rates: TransportRate[] }>("/api/port-models/transport-rates"),
+  upsertTransportRate: (input: { distance_km: number; transport_coefficient: number; note?: string | null }) =>
+    request<{ transport_rate_id: string }>("/api/port-models/transport-rates", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  spoilGrounds: () => request<{ spoil_grounds: SpoilGround[] }>("/api/port-models/spoil-grounds"),
+  upsertSpoilGround: (input: { spoil_code: string; spoil_name: string; area_name?: string | null; distance_km?: number | null; disposal_unit_price: number; note?: string | null }) =>
+    request<{ spoil_ground_id: string }>("/api/port-models/spoil-grounds", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   regions: () => request<{ regions: Region[] }>("/api/regions"),
   items: (category?: DataCategory) =>
     request<{ items: Item[] }>(`/api/items${category ? `?category=${category}` : ""}`),

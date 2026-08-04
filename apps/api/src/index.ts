@@ -26,6 +26,7 @@ import { buildXlsxExport } from "./services/exportXlsx";
 import { buildEstimateLinkXlsx } from "./services/exportEstimateLink";
 import { buildPptxExport } from "./services/exportPptx";
 import { buildPdfExport, getCjkFontBytes } from "./services/exportPdf";
+import { buildEstimateXlsx } from "./services/exportEstimateXlsx";
 import { parsePeriod } from "./lib/stats";
 import { getAiProviderInfo, getAvailableProviders } from "./lib/ai";
 import { buildMarketSummary, type Audience } from "./services/aiSummary";
@@ -88,6 +89,34 @@ import {
   estimatePort,
   portEstimateSchema,
 } from "./services/portModels";
+import {
+  listEstimationBases,
+  createEstimationBase,
+  updateEstimationBase,
+  upsertOverheadRate,
+  listTrees,
+  createTree,
+  listBreakdowns,
+  createBreakdown,
+  updateBreakdown,
+  importBreakdowns,
+  listQuantities,
+  addQuantity,
+  updateQuantity,
+  deleteQuantity,
+  calculateEstimate,
+  listEstimates,
+  getEstimate,
+  deleteEstimate,
+  aiSuggestBreakdowns,
+  estimationBaseSchema,
+  treeSchema,
+  breakdownSchema,
+  rateSchema,
+  quantitySchema,
+} from "./services/estimating";
+import { parseCsv, parseWorkbookRows } from "./lib/csv";
+import { decodeBuffer } from "./lib/decode";
 import { runScheduledJobs } from "./lib/scheduler";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
@@ -1037,6 +1066,283 @@ app.post("/api/port-models/estimate", async (c) => {
   try {
     const result = await estimatePort(sql, parsed.data);
     return ok(c, { estimate: result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+// ---- 積算エンジン（Phase 4） ----
+
+const ESTIMATE_WRITE_ROLES = ["data_ingester", "data_approver", "estimator", "estimating_manager", "system_admin"];
+
+app.get("/api/estimation-bases", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { estimation_bases: await listEstimationBases(sql) });
+});
+
+app.post("/api/estimation-bases", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = estimationBaseSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await createEstimationBase(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "estimation_base.create", "estimation_base", String(id));
+    return ok(c, { estimation_base_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.patch("/api/estimation-bases/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = estimationBaseSchema.partial().safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await updateEstimationBase(sql, c.req.param("id"), parsed.data);
+    if (!id) return fail(c, "NOT_FOUND", "積算基準が見つかりません。", 404);
+    await recordAudit(sql, identity, "estimation_base.update", "estimation_base", String(id));
+    return ok(c, { estimation_base_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.put("/api/estimation-bases/:id/rates/:rateType", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = rateSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await upsertOverheadRate(sql, c.req.param("id"), c.req.param("rateType"), parsed.data);
+    await recordAudit(sql, identity, "overhead_rate.upsert", "overhead_rate", String(id), { rate_type: c.req.param("rateType") });
+    return ok(c, { rate_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/work-type-trees", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { trees: await listTrees(sql, c.req.query("base_id") ?? undefined) });
+});
+
+app.post("/api/work-type-trees", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = treeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await createTree(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "work_type_tree.create", "work_type_tree", String(id));
+    return ok(c, { tree_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/work-breakdowns", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, {
+    breakdowns: await listBreakdowns(sql, {
+      baseId: c.req.query("base_id") ?? undefined,
+      treeId: c.req.query("tree_id") ?? undefined,
+    }),
+  });
+});
+
+app.post("/api/work-breakdowns", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = breakdownSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await createBreakdown(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "work_breakdown.create", "work_breakdown", String(id));
+    return ok(c, { breakdown_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.patch("/api/work-breakdowns/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = breakdownSchema.partial().safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await updateBreakdown(sql, c.req.param("id"), parsed.data);
+    if (!id) return fail(c, "NOT_FOUND", "歩掛が見つかりません。", 404);
+    await recordAudit(sql, identity, "work_breakdown.update", "work_breakdown", String(id));
+    return ok(c, { breakdown_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/work-breakdowns/import", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const form = await c.req.formData().catch(() => null);
+  if (!form) return fail(c, "VALIDATION_ERROR", "multipart/form-data が必要です。", 400);
+  const file = form.get("file");
+  const baseId = String(form.get("base_id") ?? "");
+  if (!(file instanceof File) || !baseId) {
+    return fail(c, "VALIDATION_ERROR", "file と base_id が必要です。", 400);
+  }
+  try {
+    const buffer = await file.arrayBuffer();
+    const fileName = file.name.toLowerCase();
+    const rows = fileName.endsWith(".xlsx")
+      ? parseWorkbookRows(buffer)
+      : parseCsv(decodeBuffer(buffer));
+    const result = await importBreakdowns(sql, { baseId, rows, identity });
+    await recordAudit(sql, identity, "work_breakdown.import", "estimation_base", baseId, { imported: result.imported, errors: result.errors.length });
+    return ok(c, { result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/quantities", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const projectId = c.req.query("project_id") ?? "";
+  if (!projectId) return fail(c, "VALIDATION_ERROR", "project_id が必要です。", 400);
+  return ok(c, { quantities: await listQuantities(sql, projectId) });
+});
+
+app.post("/api/quantities", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = quantitySchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await addQuantity(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "quantity.create", "quantity", String(id));
+    return ok(c, { quantity_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.patch("/api/quantities/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = quantitySchema.partial().safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await updateQuantity(sql, c.req.param("id"), parsed.data);
+    if (!id) return fail(c, "NOT_FOUND", "数量が見つかりません。", 404);
+    await recordAudit(sql, identity, "quantity.update", "quantity", String(id));
+    return ok(c, { quantity_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.delete("/api/quantities/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await deleteQuantity(sql, c.req.param("id"));
+    if (!id) return fail(c, "NOT_FOUND", "数量が見つかりません。", 404);
+    await recordAudit(sql, identity, "quantity.delete", "quantity", String(id));
+    return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/estimates/calculate", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = z
+    .object({
+      project_id: z.string().min(1),
+      base_id: z.string().min(1),
+      name: z.string().min(1).max(200),
+    })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const estimate = await calculateEstimate(sql, {
+      projectId: parsed.data.project_id,
+      baseId: parsed.data.base_id,
+      name: parsed.data.name,
+      identity,
+    });
+    await recordAudit(sql, identity, "estimate.calculate", "estimate", String(estimate.id), { total: estimate.total });
+    return ok(c, { estimate }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/estimates", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { estimates: await listEstimates(sql, c.req.query("project_id") ?? undefined) });
+});
+
+app.get("/api/estimates/:id", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const estimate = await getEstimate(sql, c.req.param("id"));
+  if (!estimate) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+  return ok(c, { estimate });
+});
+
+app.get("/api/estimates/:id/export", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  try {
+    const estimate = await getEstimate(sql, c.req.param("id"));
+    if (!estimate) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+    const buffer = await buildEstimateXlsx(sql, c.req.param("id"));
+    return c.body(buffer, 200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="cci-estimate-${c.req.param("id").slice(0, 8)}.xlsx"`,
+    });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.delete("/api/estimates/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await deleteEstimate(sql, c.req.param("id"));
+    if (!id) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+    await recordAudit(sql, identity, "estimate.delete", "estimate", String(id));
+    return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/ai/breakdown-suggest", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = z
+    .object({
+      project_id: z.string().min(1),
+      base_id: z.string().min(1),
+    })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const result = await aiSuggestBreakdowns(sql, c.env, {
+      projectId: parsed.data.project_id,
+      baseId: parsed.data.base_id,
+      identity,
+    });
+    return ok(c, { suggestion: result });
   } catch (e) {
     return handleError(c, e);
   }

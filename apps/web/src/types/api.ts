@@ -481,6 +481,187 @@ export interface PortEstimate {
   };
 }
 
+// ---- 積算エンジン（Phase 4） ----
+
+export interface OverheadRate {
+  rate_type: "common_temp" | "site_management" | "general_management";
+  rate: number;
+  correction_json: Record<string, unknown>;
+  applicable_from: string | null;
+  applicable_to: string | null;
+}
+
+export interface EstimationBase {
+  id: string;
+  base_code: string;
+  base_name: string;
+  category: string;
+  fiscal_year: number;
+  applicable_from: string;
+  applicable_to: string | null;
+  rounding_rules: Record<string, string>;
+  status: string;
+  source_type: string | null;
+  source_note: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  rates: OverheadRate[];
+}
+
+export interface EstimationBaseInput {
+  base_code: string;
+  base_name: string;
+  category?: string;
+  fiscal_year: number;
+  applicable_from: string;
+  applicable_to?: string | null;
+  rounding_rules?: Record<string, string>;
+  status?: string;
+  source_type?: string | null;
+  source_note?: string | null;
+}
+
+export interface WorkTypeTree {
+  id: string;
+  base_id: string;
+  parent_id: string | null;
+  level: number;
+  code: string;
+  name: string;
+  unit: string | null;
+  standard_name: string | null;
+  is_active: boolean;
+}
+
+export interface ResourceItem {
+  name: string;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface WorkBreakdown {
+  id: string;
+  base_id: string;
+  tree_id: string;
+  tree_code: string;
+  tree_name: string;
+  condition_json: Record<string, unknown>;
+  labor: ResourceItem[];
+  material: ResourceItem[];
+  machinery: ResourceItem[];
+  note: string | null;
+  source_type: string | null;
+  created_by: string;
+  updated_at: string;
+}
+
+export interface WorkBreakdownInput {
+  base_id: string;
+  tree_id: string;
+  condition_json: Record<string, unknown>;
+  labor: ResourceItem[];
+  material: ResourceItem[];
+  machinery: ResourceItem[];
+  note?: string | null;
+  source_type?: string | null;
+}
+
+export interface QuantityRow {
+  id: string;
+  project_id: string;
+  tree_id: string;
+  tree_code: string;
+  tree_name: string;
+  item_name: string | null;
+  standard_name: string | null;
+  unit: string | null;
+  quantity: number;
+  condition_json: Record<string, unknown>;
+  source_note: string | null;
+  created_by: string;
+  updated_at: string;
+}
+
+export interface QuantityInput {
+  project_id: string;
+  tree_id: string;
+  item_name?: string | null;
+  standard_name?: string | null;
+  unit?: string | null;
+  quantity: number;
+  condition_json: Record<string, unknown>;
+  source_note?: string | null;
+}
+
+export interface EstimateSummary {
+  id: string;
+  project_id: string;
+  project_name: string;
+  base_id: string;
+  base_code: string;
+  base_name: string;
+  name: string;
+  status: string;
+  direct_cost: number;
+  common_temp_cost: number;
+  site_management_cost: number;
+  general_management_cost: number;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  created_by: string;
+  created_at: string;
+}
+
+export interface EstimateLine {
+  id: string;
+  tree_id: string | null;
+  tree_code: string | null;
+  tree_name: string | null;
+  unit: string | null;
+  quantity: number;
+  breakdown_id: string | null;
+  labor_cost: number;
+  material_cost: number;
+  machinery_cost: number;
+  direct_cost: number;
+  note: string | null;
+}
+
+export interface EstimateMaterial {
+  id: string;
+  line_id: string | null;
+  resource_type: string;
+  resource_name: string;
+  unit: string | null;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  source_note: string | null;
+}
+
+export interface EstimateDetail extends EstimateSummary {
+  rounding_rule_json: Record<string, string>;
+  warnings: string[];
+  lines: EstimateLine[];
+  materials: EstimateMaterial[];
+}
+
+export interface BreakdownSuggestion {
+  provider: string;
+  model: string | null;
+  suggestions: Array<{
+    quantity_id: string;
+    tree_code: string;
+    tree_name: string;
+    breakdown_id: string;
+    score: number;
+    reason: string;
+  }>;
+}
+
 export interface FetchJob {
   id: string;
   data_source_id: string;

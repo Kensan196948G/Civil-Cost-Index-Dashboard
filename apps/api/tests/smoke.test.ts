@@ -406,4 +406,64 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(est.body.data.estimate.result.rows.length).toBe(dredging.vessels.length);
     expect(est.body.data.estimate.result.total_cost).toBeGreaterThan(0);
   });
+
+  it("estimating: base/tree/quantity/calculate/export/ai-suggest/delete", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const basesRes = await get("/api/estimation-bases");
+    expect(basesRes.status).toBe(200);
+    const base = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "MLIT-2026");
+    expect(base).toBeDefined();
+
+    const treesRes = await get(`/api/work-type-trees?base_id=${base.id}`);
+    expect(treesRes.status).toBe(200);
+    const soil = treesRes.body.data.trees.find((t: { code: string }) => t.code === "SOIL_EXCAVATION");
+    expect(soil).toBeDefined();
+
+    const proj = await get("/api/projects", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ name: "スモーク 積算テスト", work_type: "土工", status: "planning" }),
+    });
+    expect(proj.status).toBe(201);
+    const projectId = proj.body.data.project.id;
+
+    const qty = await get("/api/quantities", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, tree_id: soil.id, quantity: 500, unit: "m3", condition_json: {} }),
+    });
+    expect(qty.status).toBe(201);
+
+    const calc = await get("/api/estimates/calculate", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, base_id: base.id, name: "スモーク積算" }),
+    });
+    expect(calc.status).toBe(201);
+    const estimate = calc.body.data.estimate;
+    expect(estimate.total).toBeGreaterThan(0);
+    expect(estimate.lines.length).toBe(1);
+
+    const detail = await get(`/api/estimates/${estimate.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.estimate.materials.length).toBeGreaterThan(0);
+
+    const xlsx = await app!.fetch(new Request(`http://localhost/api/estimates/${estimate.id}/export`), env);
+    expect(xlsx.status).toBe(200);
+    const wb = XLSX.read(await xlsx.arrayBuffer(), { type: "buffer" });
+    expect(wb.SheetNames).toEqual(expect.arrayContaining(["総括表", "内訳", "単価表"]));
+
+    const suggest = await get("/api/ai/breakdown-suggest", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, base_id: base.id }),
+    });
+    expect(suggest.status).toBe(200);
+    expect(suggest.body.data.suggestion.suggestions.length).toBeGreaterThan(0);
+
+    const delEst = await get(`/api/estimates/${estimate.id}`, { method: "DELETE", headers: admin });
+    expect(delEst.status).toBe(200);
+    const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+    expect(delProj.status).toBe(200);
+  });
 });

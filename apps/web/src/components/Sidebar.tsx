@@ -12,6 +12,12 @@ const MENU = [
     { href: "/export", label: "レポート出力", icon: "⤓" },
     { href: "/projects", label: "案件影響分析", icon: "▥" },
     { href: "/port", label: "港湾コストモデル", icon: "⚓" },
+    { href: "/estimates", label: "積算計算", icon: "≖" },
+  ]},
+  { group: "積算管理", items: [
+    { href: "/admin/estimation-bases", label: "積算基準・諸経費", icon: "▤" },
+    { href: "/admin/breakdowns", label: "工種・歩掛マスタ", icon: "⌬" },
+    { href: "/admin/quantities", label: "数量計算書", icon: "№" },
   ]},
   { group: "AI分析", items: [
     { href: "/ai", label: "AI市況ナビ", icon: "✦" },

@@ -43,6 +43,26 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | GET | `/api/port-models/vessels` | 港湾作業船マスタ（PoC） |
 | GET | `/api/port-models/work-types` | 港湾工種・船舶構成（PoC） |
 | POST | `/api/port-models/estimate` | 港湾工事コスト試算（PoC） |
+| GET | `/api/estimation-bases` | 積算基準一覧（諸経費率付き） |
+| POST | `/api/estimation-bases` | 積算基準作成 |
+| PATCH | `/api/estimation-bases/{id}` | 積算基準更新 |
+| PUT | `/api/estimation-bases/{id}/rates/{rateType}` | 諸経費率登録/更新（common_temp / site_management / general_management） |
+| GET | `/api/work-type-trees` | 工種体系一覧（`base_id` 任意） |
+| POST | `/api/work-type-trees` | 工種体系作成 |
+| GET | `/api/work-breakdowns` | 歩掛一覧（`base_id` / `tree_id` 任意） |
+| POST | `/api/work-breakdowns` | 歩掛作成（労務/材料/機械のJSON明細） |
+| PATCH | `/api/work-breakdowns/{id}` | 歩掛更新 |
+| POST | `/api/work-breakdowns/import` | CSV/Excelで歩掛一括取込（既存システム/書籍エクスポート） |
+| GET | `/api/quantities?project_id=` | 案件の数量一覧 |
+| POST | `/api/quantities` | 数量追加 |
+| PATCH | `/api/quantities/{id}` | 数量更新 |
+| DELETE | `/api/quantities/{id}` | 数量削除 |
+| POST | `/api/estimates/calculate` | 積算計算（数量×歩掛×単価→諸経費→税） |
+| GET | `/api/estimates` | 積算結果一覧（`project_id` 任意） |
+| GET | `/api/estimates/{id}` | 積算結果詳細（総括・内訳・単価表） |
+| GET | `/api/estimates/{id}/export` | 積算書Excel（総括表/内訳/単価表） |
+| DELETE | `/api/estimates/{id}` | 積算結果削除 |
+| POST | `/api/ai/breakdown-suggest` | AI歩掛選定候補（要承認・金額は計算しない） |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

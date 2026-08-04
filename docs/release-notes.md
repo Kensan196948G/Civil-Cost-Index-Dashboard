@@ -1,5 +1,25 @@
 # リリースノート
 
+## Unreleased（2026-08-05: Phase 4 積算エンジン土台）
+
+- migration `008_estimating.sql`
+  - `estimation_bases`（基準・年度・適用日・端数規則・データ経路）
+  - `work_type_trees`（工種/区分子/細別/規格）
+  - `quantities`（案件の数量計算書・施工条件）
+  - `work_breakdowns`（労務/材料/機械の歩掛JSON・条件付き）
+  - `overhead_rates`（共通仮設費/現場管理費/一般管理費等率）
+  - `estimate_headers` / `estimate_lines` / `estimate_materials`（積算結果）
+  - `ai_suggestions`（AI候補の監査・承認基盤）
+  - サンプル基準（MLIT-2026 / PORT-2026）と土工・コンクリート工・舗装工の工種体系・歩掛
+- 積算計算エンジン（`lib/estimating.ts`・純粋関数）
+  - 数量×歩掛明細×単価 → 直接工事費 → 共通仮設費 → 現場管理費 → 一般管理費等 → 消費税
+  - 積算基準ごとの端数処理（円/十円/百円/千円の切捨・四捨五入・切上）
+- API: 基準/工種/歩掛/数量/積算計算/積算書Excel/AI歩掛候補（`/api/ai/breakdown-suggest`）
+- Web: `/admin/estimation-bases`（基準・諸経費）、`/admin/breakdowns`（工種・歩掛・CSV/Excel取込）、
+  `/admin/quantities`（数量計算書）、`/estimates`（積算計算・総括表/内訳/単価表・AI候補）
+- AI歩掛選定は候補提示のみ（DeepSeek等で生成・ルールフォールバック）。金額はコードのみが計算
+- テスト113件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: AIプロバイダー拡張）
 
 - DeepSeek（`DEEPSEEK_API_KEY`・`deepseek-chat`）と Perplexity（`PERPLEXITY_API_KEY`・`sonar`）をAIプロバイダーへ追加

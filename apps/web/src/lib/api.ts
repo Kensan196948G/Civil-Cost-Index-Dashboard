@@ -9,11 +9,16 @@ import type {
   AiTemplate,
   ApiEnvelope,
   AuthMe,
+  BreakdownSuggestion,
   DataCategory,
   DataSource,
   DataSourceInput,
   DashboardAlert,
   DashboardSummary,
+  EstimationBase,
+  EstimationBaseInput,
+  EstimateDetail,
+  EstimateSummary,
   FetchJob,
   FetchSchedule,
   FetchScheduleInput,
@@ -22,6 +27,8 @@ import type {
   OperationAuditLog,
   PortEstimate,
   PortWorkType,
+  QuantityInput,
+  QuantityRow,
   PriceSnapshot,
   PriceVersion,
   PriceVersionComparison,
@@ -37,6 +44,9 @@ import type {
   TimeseriesResponse,
   User,
   Vessel,
+  WorkBreakdown,
+  WorkBreakdownInput,
+  WorkTypeTree,
 } from "@/types/api";
 import { loadPrefs } from "@/lib/utils";
 
@@ -172,6 +182,50 @@ export const api = {
   portWorkTypes: () => request<{ work_types: PortWorkType[] }>("/api/port-models/work-types"),
   portEstimate: (input: { work_type_id: string; quantity: number; operation_rate?: number; mobilization_days?: number }) =>
     request<{ estimate: PortEstimate }>("/api/port-models/estimate", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  estimationBases: () => request<{ estimation_bases: EstimationBase[] }>("/api/estimation-bases"),
+  createEstimationBase: (input: EstimationBaseInput) =>
+    request<{ estimation_base_id: string }>("/api/estimation-bases", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  patchEstimationBase: (id: string, input: Partial<EstimationBaseInput>) =>
+    request<{ estimation_base_id: string }>(`/api/estimation-bases/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  upsertOverheadRate: (baseId: string, rateType: string, input: { rate: number; correction_json?: Record<string, unknown> }) =>
+    request<{ rate_id: string }>(`/api/estimation-bases/${baseId}/rates/${rateType}`, { method: "PUT", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  workTypeTrees: (baseId?: string) =>
+    request<{ trees: WorkTypeTree[] }>(`/api/work-type-trees${baseId ? `?base_id=${baseId}` : ""}`),
+  createWorkTypeTree: (input: Partial<WorkTypeTree> & { base_id: string; code: string; name: string }) =>
+    request<{ tree_id: string }>("/api/work-type-trees", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  workBreakdowns: (params?: { base_id?: string; tree_id?: string }) =>
+    request<{ breakdowns: WorkBreakdown[] }>(`/api/work-breakdowns${buildQuery(params ?? {})}`),
+  createWorkBreakdown: (input: WorkBreakdownInput) =>
+    request<{ breakdown_id: string }>("/api/work-breakdowns", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  patchWorkBreakdown: (id: string, input: Partial<WorkBreakdownInput>) =>
+    request<{ breakdown_id: string }>(`/api/work-breakdowns/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  importWorkBreakdowns: (file: File, baseId: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("base_id", baseId);
+    return request<{ result: { imported: number; errors: Array<{ row: number; column: string; reason: string }> } }>("/api/work-breakdowns/import", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: fd,
+    });
+  },
+  quantities: (projectId: string) => request<{ quantities: QuantityRow[] }>(`/api/quantities?project_id=${projectId}`),
+  addQuantity: (input: QuantityInput) =>
+    request<{ quantity_id: string }>("/api/quantities", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  patchQuantity: (id: string, input: Partial<QuantityInput>) =>
+    request<{ quantity_id: string }>(`/api/quantities/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteQuantity: (id: string) =>
+    request<{ deleted: boolean }>(`/api/quantities/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  calculateEstimate: (input: { project_id: string; base_id: string; name: string }) =>
+    request<{ estimate: EstimateDetail }>("/api/estimates/calculate", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  estimates: (projectId?: string) =>
+    request<{ estimates: EstimateSummary[] }>(`/api/estimates${projectId ? `?project_id=${projectId}` : ""}`),
+  estimate: (id: string) => request<{ estimate: EstimateDetail }>(`/api/estimates/${id}`),
+  estimateExportUrl: (id: string) => `/api/estimates/${id}/export`,
+  deleteEstimate: (id: string) =>
+    request<{ deleted: boolean }>(`/api/estimates/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  aiBreakdownSuggest: (input: { project_id: string; base_id: string }) =>
+    request<{ suggestion: BreakdownSuggestion }>("/api/ai/breakdown-suggest", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   regions: () => request<{ regions: Region[] }>("/api/regions"),
   items: (category?: DataCategory) =>
     request<{ items: Item[] }>(`/api/items${category ? `?category=${category}` : ""}`),

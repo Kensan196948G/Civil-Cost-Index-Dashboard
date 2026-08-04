@@ -93,6 +93,10 @@ systemd ユニット `cci.service` を登録済み（起動時自動起動）。
 | 📤 レポート出力 | CSV／Excel／PDF／PowerPoint出力＋積算連携Excel（単価候補・根拠・改定差分） | `/export/` |
 | ▥ 案件影響分析 | 案件・数量・基準単価・調達月を登録し、価格影響額（数量×基準単価×変動率）を下振れ/標準/上振れ・月別に試算 | `/projects/` |
 | ⚓ 港湾コストモデル | 作業船損料・稼働率・回航費・待機費の簡易試算（浚渫／ケーソン／基礎捨石のPoC） | `/port/` |
+| ≖ 積算計算 | 数量×歩掛×単価→諸経費→税の積算エンジン（端数処理・積算書Excel・AI歩掛候補） | `/estimates/` |
+| ▤ 積算基準・諸経費 | 積算基準（年度・適用日・端数規則）と諸経費率（3経路のデータ取込対応） | `/admin/estimation-bases/` |
+| ⌬ 工種・歩掛マスタ | 工種体系・歩掛（労務/材料/機械）・CSV/Excel一括取込 | `/admin/breakdowns/` |
+| № 数量計算書 | 案件別の数量・施工条件の入力 | `/admin/quantities/` |
 | 🗂️ データソース管理 | 公式データソース登録・URL取得（CSV/Excel）・無効化 | `/admin/data-sources/` |
 | 📥 取込履歴 | CSV/Excel/URL取込の成功・失敗・エラー行確認 | `/admin/fetch-jobs/` |
 | ⏰ 定期取得 | Cloudflare Cronによる日次/月次/年次取得・未更新通知（Teams/Slack）・承認後に本番反映 | `/admin/schedules/` |

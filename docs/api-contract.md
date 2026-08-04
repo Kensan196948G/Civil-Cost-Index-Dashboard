@@ -76,6 +76,14 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | POST | `/api/port-models/spoil-grounds` | 土捨場・処分場登録・更新 |
 | GET | `/api/port-models/shift-rules` | 補正ルール（夜間/交代制/超勤）一覧 |
 | POST | `/api/port-models/shift-rules` | 補正ルール登録・更新 |
+| GET | `/api/change-orders` | 設計変更・変更契約一覧（`project_id` 任意） |
+| POST | `/api/change-orders` | 変更契約作成（変更前基準年度を保持） |
+| GET | `/api/change-orders/{id}` | 変更契約詳細（明細・増減額集計） |
+| DELETE | `/api/change-orders/{id}` | 変更契約削除 |
+| POST | `/api/change-orders/{id}/lines` | 変更明細追加（変更前後数量・単価から増減額を自動計算） |
+| DELETE | `/api/change-orders/{id}/lines/{lineId}` | 変更明細削除 |
+| GET | `/api/change-orders/{id}/export` | 差額表Excel（差額集計／変更明細） |
+| GET | `/api/estimates/{id}/export.pdf` | 積算書PDF（総括表・内訳・単価表・港湾補足・日本語フォント） |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

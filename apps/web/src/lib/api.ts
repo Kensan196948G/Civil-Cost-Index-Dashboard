@@ -10,6 +10,8 @@ import type {
   ApiEnvelope,
   AuthMe,
   BreakdownSuggestion,
+  ChangeOrderDetail,
+  ChangeOrderSummary,
   DataCategory,
   DataSource,
   DataSourceInput,
@@ -242,10 +244,33 @@ export const api = {
     request<{ estimates: EstimateSummary[] }>(`/api/estimates${projectId ? `?project_id=${projectId}` : ""}`),
   estimate: (id: string) => request<{ estimate: EstimateDetail }>(`/api/estimates/${id}`),
   estimateExportUrl: (id: string) => `/api/estimates/${id}/export`,
+  estimatePdfExportUrl: (id: string) => `/api/estimates/${id}/export.pdf`,
   deleteEstimate: (id: string) =>
     request<{ deleted: boolean }>(`/api/estimates/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
   aiBreakdownSuggest: (input: { project_id: string; base_id: string }) =>
     request<{ suggestion: BreakdownSuggestion }>("/api/ai/breakdown-suggest", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  changeOrders: (projectId?: string) =>
+    request<{ change_orders: ChangeOrderSummary[] }>(`/api/change-orders${projectId ? `?project_id=${projectId}` : ""}`),
+  createChangeOrder: (input: { project_id: string; base_id?: string | null; estimate_id?: string | null; name: string; change_date?: string | null; reason?: string | null }) =>
+    request<{ change_order_id: string }>("/api/change-orders", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  changeOrder: (id: string) => request<{ change_order: ChangeOrderDetail }>(`/api/change-orders/${id}`),
+  deleteChangeOrder: (id: string) =>
+    request<{ deleted: boolean }>(`/api/change-orders/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  addChangeOrderLine: (id: string, input: {
+    tree_id?: string | null;
+    tree_code?: string | null;
+    tree_name?: string | null;
+    unit?: string | null;
+    before_quantity: number;
+    after_quantity: number;
+    before_unit_price: number;
+    after_unit_price: number;
+    note?: string | null;
+  }) =>
+    request<{ line_id: string }>(`/api/change-orders/${id}/lines`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteChangeOrderLine: (changeOrderId: string, lineId: string) =>
+    request<{ deleted: boolean }>(`/api/change-orders/${changeOrderId}/lines/${lineId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  changeOrderExportUrl: (id: string) => `/api/change-orders/${id}/export`,
   seaConditions: (seaAreaCode?: string) =>
     request<{ sea_conditions: SeaCondition[] }>(`/api/port-models/sea-conditions${seaAreaCode ? `?sea_area_code=${seaAreaCode}` : ""}`),
   upsertSeaCondition: (input: {

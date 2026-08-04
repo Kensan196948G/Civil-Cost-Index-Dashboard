@@ -297,6 +297,9 @@ export default function EstimatesPage() {
                       <a href={api.estimateExportUrl(detail.id)} download={`cci-estimate-${detail.id.slice(0, 8)}.xlsx`} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
                         積算書Excel出力
                       </a>
+                      <a href={api.estimatePdfExportUrl(detail.id)} download={`cci-estimate-${detail.id.slice(0, 8)}.pdf`} className="rounded border border-rose-400 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                        積算書PDF出力
+                      </a>
                       <button onClick={() => void suggest()} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50">AI歩掛候補</button>
                     </div>
                   </div>

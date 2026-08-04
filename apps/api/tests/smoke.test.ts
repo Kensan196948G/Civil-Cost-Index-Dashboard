@@ -577,4 +577,80 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(vesselBody.data.result.imported).toBe(0);
     expect(vesselBody.data.result.errors.length).toBeGreaterThan(0);
   });
+
+  it("change orders: create/line/diff/export/delete", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const proj = await get("/api/projects", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ name: "スモーク 変更契約", work_type: "土工", status: "contracted" }),
+    });
+    expect(proj.status).toBe(201);
+    const projectId = proj.body.data.project.id;
+    const co = await get("/api/change-orders", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, name: "スモーク設計変更", change_date: "2026-08-05", reason: "数量変更" }),
+    });
+    expect(co.status).toBe(201);
+    const coId = co.body.data.change_order_id;
+    const line = await get(`/api/change-orders/${coId}/lines`, {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({
+        tree_code: "SOIL_EXCAVATION",
+        tree_name: "掘削工",
+        unit: "m3",
+        before_quantity: 100,
+        after_quantity: 120,
+        before_unit_price: 1000,
+        after_unit_price: 1100,
+      }),
+    });
+    expect(line.status).toBe(201);
+    const detail = await get(`/api/change-orders/${coId}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.change_order.summary.net).toBe(32000);
+    expect(detail.body.data.change_order.lines[0].amount_diff).toBe(32000);
+
+    const xlsx = await app!.fetch(new Request(`http://localhost/api/change-orders/${coId}/export`), env);
+    expect(xlsx.status).toBe(200);
+    const wb = XLSX.read(await xlsx.arrayBuffer(), { type: "buffer" });
+    expect(wb.SheetNames).toEqual(expect.arrayContaining(["差額集計", "変更明細"]));
+
+    const delCo = await get(`/api/change-orders/${coId}`, { method: "DELETE", headers: admin });
+    expect(delCo.status).toBe(200);
+    const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+    expect(delProj.status).toBe(200);
+  });
+
+  it("estimate PDF export", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const basesRes = await get("/api/estimation-bases");
+    const base = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "MLIT-2026");
+    const treesRes = await get(`/api/work-type-trees?base_id=${base.id}`);
+    const soil = treesRes.body.data.trees.find((t: { code: string }) => t.code === "SOIL_EXCAVATION");
+    const proj = await get("/api/projects", { method: "POST", headers: admin, body: JSON.stringify({ name: "スモーク PDF積算", work_type: "土工" }) });
+    const projectId = proj.body.data.project.id;
+    await get("/api/quantities", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, tree_id: soil.id, quantity: 1000, unit: "m3", condition_json: {} }),
+    });
+    const calc = await get("/api/estimates/calculate", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, base_id: base.id, name: "スモークPDF" }),
+    });
+    expect(calc.status).toBe(201);
+    const estimateId = calc.body.data.estimate.id;
+    const pdf = await app!.fetch(new Request(`http://localhost/api/estimates/${estimateId}/export.pdf`), env);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers.get("content-type")).toContain("application/pdf");
+    const bytes = new Uint8Array(await pdf.arrayBuffer());
+    expect(new TextDecoder().decode(bytes.slice(0, 8)).startsWith("%PDF-")).toBe(true);
+
+    await get(`/api/estimates/${estimateId}`, { method: "DELETE", headers: admin });
+    await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+  });
 });

@@ -770,6 +770,42 @@ export interface ShiftRule {
   updated_at: string;
 }
 
+export interface ChangeOrderSummary {
+  id: string;
+  project_id: string;
+  project_name: string;
+  base_id: string | null;
+  base_code: string | null;
+  estimate_id: string | null;
+  name: string;
+  change_date: string | null;
+  reason: string | null;
+  status: string;
+  created_by: string;
+  created_at: string;
+  net_diff: number;
+}
+
+export interface ChangeOrderLine {
+  id: string;
+  tree_id: string | null;
+  tree_code: string;
+  tree_name: string;
+  unit: string;
+  before_quantity: number;
+  after_quantity: number;
+  before_unit_price: number;
+  after_unit_price: number;
+  quantity_diff: number;
+  amount_diff: number;
+  note: string | null;
+}
+
+export interface ChangeOrderDetail extends ChangeOrderSummary {
+  lines: ChangeOrderLine[];
+  summary: { increase: number; decrease: number; net: number };
+}
+
 export interface FetchJob {
   id: string;
   data_source_id: string;

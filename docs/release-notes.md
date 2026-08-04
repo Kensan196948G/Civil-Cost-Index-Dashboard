@@ -1,5 +1,14 @@
 # リリースノート
 
+## Unreleased（2026-08-05: 港湾用積算書PDF・設計変更/変更契約差額）
+
+- migration `013_change_orders.sql`: `change_orders` / `change_order_lines`（変更前後数量・単価・基準年度を保持）
+- 差額計算ライブラリ（`lib/changeOrder.ts`）: 数量差・増減額・増額/減額/差額の集計
+- API: 変更契約のCRUD・変更明細（自動計算）・差額表Excel
+- 積算書PDF: `GET /api/estimates/{id}/export.pdf`（総括表・内訳・単価表・港湾補足・日本語フォント埋め込み）
+- Web: `/admin/change-orders`（変更契約・明細・差額集計・Excel出力）、`/estimates` に積算書PDF出力を追加
+- テスト123件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: 夜間施工・交代制・超勤補正）
 
 - migration `012_shift_rules.sql`: `work_shift_rules`（種別・時間帯・労務/機械の割増率・適用条件）とサンプル3件（夜間22-5時、交代制2班、超勤2時間）

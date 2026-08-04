@@ -27,6 +27,7 @@ import { buildEstimateLinkXlsx } from "./services/exportEstimateLink";
 import { buildPptxExport } from "./services/exportPptx";
 import { buildPdfExport, getCjkFontBytes } from "./services/exportPdf";
 import { buildEstimateXlsx } from "./services/exportEstimateXlsx";
+import { buildEstimatePdf } from "./services/exportEstimatePdf";
 import { parsePeriod } from "./lib/stats";
 import { getAiProviderInfo, getAvailableProviders } from "./lib/ai";
 import { buildMarketSummary, type Audience } from "./services/aiSummary";
@@ -135,6 +136,17 @@ import {
 } from "./services/estimating";
 import { parseCsv, parseWorkbookRows } from "./lib/csv";
 import { decodeBuffer } from "./lib/decode";
+import {
+  createChangeOrder,
+  listChangeOrders,
+  getChangeOrder,
+  addChangeOrderLine,
+  deleteChangeOrderLine,
+  deleteChangeOrder,
+  buildChangeOrderXlsx,
+  changeOrderSchema,
+  changeLineSchema,
+} from "./services/changeOrders";
 import { runScheduledJobs } from "./lib/scheduler";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
@@ -1498,6 +1510,107 @@ app.delete("/api/estimates/:id", async (c) => {
     if (!id) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
     await recordAudit(sql, identity, "estimate.delete", "estimate", String(id));
     return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/estimates/:id/export.pdf", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  try {
+    const fontBytes = await getCjkFontBytes(c.env);
+    const buffer = await buildEstimatePdf(sql, c.req.param("id"), fontBytes);
+    return c.body(toArrayBuffer(buffer), 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="cci-estimate-${c.req.param("id").slice(0, 8)}.pdf"`,
+    });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+// ---- 設計変更・変更契約差額 ----
+
+app.get("/api/change-orders", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { change_orders: await listChangeOrders(sql, c.req.query("project_id") ?? undefined) });
+});
+
+app.post("/api/change-orders", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = changeOrderSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await createChangeOrder(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "change_order.create", "change_order", String(id));
+    return ok(c, { change_order_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/change-orders/:id", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const changeOrder = await getChangeOrder(sql, c.req.param("id"));
+  if (!changeOrder) return fail(c, "NOT_FOUND", "変更契約が見つかりません。", 404);
+  return ok(c, { change_order: changeOrder });
+});
+
+app.delete("/api/change-orders/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await deleteChangeOrder(sql, c.req.param("id"));
+    if (!id) return fail(c, "NOT_FOUND", "変更契約が見つかりません。", 404);
+    await recordAudit(sql, identity, "change_order.delete", "change_order", String(id));
+    return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/change-orders/:id/lines", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = changeLineSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await addChangeOrderLine(sql, c.req.param("id"), parsed.data);
+    await recordAudit(sql, identity, "change_order_line.create", "change_order_line", String(id));
+    return ok(c, { line_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.delete("/api/change-orders/:id/lines/:lineId", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await deleteChangeOrderLine(sql, c.req.param("lineId"));
+    if (!id) return fail(c, "NOT_FOUND", "変更明細が見つかりません。", 404);
+    await recordAudit(sql, identity, "change_order_line.delete", "change_order_line", String(id));
+    return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/change-orders/:id/export", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  try {
+    const changeOrder = await getChangeOrder(sql, c.req.param("id"));
+    if (!changeOrder) return fail(c, "NOT_FOUND", "変更契約が見つかりません。", 404);
+    const buffer = await buildChangeOrderXlsx(sql, c.req.param("id"));
+    return c.body(buffer, 200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="cci-change-order-${c.req.param("id").slice(0, 8)}.xlsx"`,
+    });
   } catch (e) {
     return handleError(c, e);
   }

@@ -1,4 +1,12 @@
 import type {
+  AiAlertsResponse,
+  AiAudience,
+  AiAuditLog,
+  AiQualityResponse,
+  AiReportResponse,
+  AiStatus,
+  AiSummaryResponse,
+  AiTemplate,
   ApiEnvelope,
   DataCategory,
   DataSource,
@@ -125,6 +133,33 @@ export const api = {
     });
   },
   csvExportUrl: (params: TimeseriesParams) => `/api/export/csv${buildQuery(toCsvParams(params))}`,
+  aiStatus: () => request<AiStatus>("/api/ai/status"),
+  aiTemplates: () => request<{ templates: AiTemplate[] }>("/api/ai/templates"),
+  aiSummary: (params?: { audience?: AiAudience; region_id?: string }) =>
+    request<AiSummaryResponse>("/api/ai/summary", {
+      method: "POST",
+      body: JSON.stringify(params ?? {}),
+    }),
+  aiAlertsExplain: (params?: { threshold_mom?: number; threshold_yoy?: number; limit?: number }) =>
+    request<AiAlertsResponse>("/api/ai/alerts/explain", {
+      method: "POST",
+      body: JSON.stringify(params ?? {}),
+    }),
+  aiReport: (params: { report_type: string; region_id?: string }) =>
+    request<AiReportResponse>("/api/ai/report", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+  aiQuality: () => request<AiQualityResponse>("/api/ai/quality"),
+  aiFeedback: (params: { audit_id: string; rating: string; comment?: string }) =>
+    request<{ updated: boolean }>("/api/ai/feedback", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+  aiAudit: (adminKey: string, params?: { feature?: string; limit?: number }) =>
+    request<{ logs: AiAuditLog[] }>(`/api/ai/audit${buildQuery(params ?? {})}`, {
+      headers: { "X-Admin-Key": adminKey },
+    }),
 };
 
 export const CATEGORY_LABELS: Record<DataCategory, string> = {

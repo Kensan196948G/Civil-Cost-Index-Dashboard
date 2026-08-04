@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import AiSummaryCard from "@/components/AiSummaryCard";
 import AlertList from "@/components/AlertList";
 import RangeBandChart, { type BandPoint } from "@/components/RangeBandChart";
 import RatesChart from "@/components/RatesChart";
@@ -128,6 +129,7 @@ export default function DashboardPage() {
       {loading && <LoadingState />}
       {!loading && summary && (
         <>
+          <AiSummaryCard regionId={regionId || undefined} compact />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold text-gray-800">主要指標（前年同月比つき）</h2>
             <div className="flex gap-1 text-xs">

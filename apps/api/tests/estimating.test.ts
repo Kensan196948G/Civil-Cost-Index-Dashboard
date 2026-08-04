@@ -101,4 +101,78 @@ describe("computeEstimate", () => {
     expect(result.warnings.length).toBe(1);
     expect(result.lines[0].direct_cost).toBe(0);
   });
+
+  it("computes port vessel cost with hire/standby/mobilization", () => {
+    const result = computeEstimate({
+      quantities: [
+        {
+          tree_id: "p1",
+          tree_code: "DREDGING",
+          tree_name: "浚渫工",
+          unit: "m3",
+          quantity: 5600,
+          condition_json: {},
+        },
+      ],
+      breakdownsByTree: new Map([
+        [
+          "p1",
+          [
+            {
+              id: "pb1",
+              condition_json: {},
+              labor: [],
+              material: [],
+              machinery: [
+                { name: "グラブ浚渫船 8m3", unit: "日", quantity: 1, unit_price: 950000, vessel_id: "GRAB_8M3" },
+              ],
+            },
+          ],
+        ],
+      ]),
+      rates: { common_temp: 0, site_management: 0, general_management: 0 },
+      rounding: {
+        direct_cost: "yen_down",
+        common_temp: "yen_down",
+        site_management: "yen_down",
+        general_management: "yen_down",
+        subtotal: "yen_down",
+        tax: "yen_down",
+        total: "yen_down",
+      },
+      taxRate: 0.1,
+      vessels: new Map([
+        [
+          "GRAB_8M3",
+          {
+            capacity: 800,
+            availability_factor: 0.7,
+            mobilization_days: 3,
+            standby_rate: 0.5,
+            hire_rate_per_day: 950000,
+          },
+        ],
+      ]),
+      port: {
+        operation_rate: 0.7,
+        mobilization_days: 3,
+        soil_correction: 0.1,
+        night_surcharge: 0,
+      },
+    });
+    // 稼働日数 10日（5600 / (800*0.7)）、待機 3日、損料 13日×950,000=12,350,000
+    // 回航 3日×950,000=2,850,000 → 合計 15,200,000 → 土質補正 +10% → 16,720,000
+    expect(result.lines[0].machinery_cost).toBe(15200000);
+    expect(result.direct_cost).toBe(16720000);
+    expect(result.port_extras).toMatchObject({
+      work_days: 10,
+      standby_days: 3,
+      mobilization_days: 3,
+      mobilization_cost: 2850000,
+      soil_correction: 0.1,
+    });
+    expect(result.subtotal).toBe(16720000);
+    expect(result.tax_amount).toBe(1672000);
+    expect(result.total).toBe(18392000);
+  });
 });

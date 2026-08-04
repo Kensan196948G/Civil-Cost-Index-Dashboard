@@ -1266,6 +1266,14 @@ app.post("/api/estimates/calculate", async (c) => {
       project_id: z.string().min(1),
       base_id: z.string().min(1),
       name: z.string().min(1).max(200),
+      port_options: z
+        .object({
+          operation_rate: z.number().min(0.1).max(1).optional(),
+          mobilization_days: z.number().int().min(0).max(60).optional().nullable(),
+          soil_correction: z.number().min(-0.5).max(2).optional(),
+          night_surcharge: z.number().min(0).max(2).optional(),
+        })
+        .optional(),
     })
     .safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
@@ -1275,6 +1283,7 @@ app.post("/api/estimates/calculate", async (c) => {
       baseId: parsed.data.base_id,
       name: parsed.data.name,
       identity,
+      portOptions: parsed.data.port_options,
     });
     await recordAudit(sql, identity, "estimate.calculate", "estimate", String(estimate.id), { total: estimate.total });
     return ok(c, { estimate }, 201);

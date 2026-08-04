@@ -2,7 +2,13 @@ import { z } from "zod";
 import type { Sql } from "../lib/db";
 import type { Env } from "../types";
 import type { Identity } from "../lib/auth";
-import { computeEstimate, type BreakdownInput, type ResourceItem } from "../lib/estimating";
+import {
+  computeEstimate,
+  type BreakdownInput,
+  type PortOptions,
+  type ResourceItem,
+  type VesselInfo,
+} from "../lib/estimating";
 import { generateAiText } from "../lib/ai";
 import type { CsvRow } from "../lib/csv";
 
@@ -37,6 +43,7 @@ const resourceSchema = z.object({
   unit: z.string().max(30),
   quantity: z.number().nonnegative(),
   unit_price: z.number().nonnegative(),
+  vessel_id: z.string().optional(),
 });
 
 export const breakdownSchema = z.object({
@@ -145,6 +152,8 @@ export type EstimateDetail = {
   total: number;
   rounding_rule_json: Record<string, string>;
   warnings: string[];
+  port_options: PortOptions | null;
+  port_extras: ReturnType<typeof computeEstimate>["port_extras"];
   created_by: string;
   created_at: string;
   lines: EstimateLineRow[];
@@ -545,18 +554,24 @@ export async function deleteQuantity(sql: Sql, id: string) {
 
 export async function calculateEstimate(
   sql: Sql,
-  input: { projectId: string; baseId: string; name: string; identity: Identity }
+  input: {
+    projectId: string;
+    baseId: string;
+    name: string;
+    identity: Identity;
+    portOptions?: Partial<PortOptions>;
+  }
 ) {
-  const { projectId, baseId, name, identity } = input;
+  const { projectId, baseId, name, identity, portOptions } = input;
   const [project] = await sql`SELECT id, name FROM projects WHERE id = ${projectId}`;
   if (!project) {
     const err = new Error("案件が見つかりません。");
     (err as Error & { status?: number }).status = 404;
     throw err;
   }
-  const [base] = await sql`
-    SELECT id, base_code, base_name, rounding_rules FROM estimation_bases WHERE id = ${baseId}
-  `;
+  const [base] = (await sql`
+    SELECT id, base_code, base_name, category, rounding_rules FROM estimation_bases WHERE id = ${baseId}
+  `) as DbRow[];
   if (!base) {
     const err = new Error("積算基準が見つかりません。");
     (err as Error & { status?: number }).status = 404;
@@ -598,19 +613,39 @@ export async function calculateEstimate(
     rates,
     rounding: base.rounding_rules,
     taxRate: 0.1,
+    vessels: base.category === "port" ? await loadVesselsMap(sql) : undefined,
+    port:
+      base.category === "port"
+        ? {
+            operation_rate: portOptions?.operation_rate ?? 0.7,
+            mobilization_days: portOptions?.mobilization_days ?? null,
+            soil_correction: portOptions?.soil_correction ?? 0,
+            night_surcharge: portOptions?.night_surcharge ?? 0,
+          }
+        : undefined,
   });
+  const port =
+    base.category === "port"
+      ? {
+          operation_rate: portOptions?.operation_rate ?? 0.7,
+          mobilization_days: portOptions?.mobilization_days ?? null,
+          soil_correction: portOptions?.soil_correction ?? 0,
+          night_surcharge: portOptions?.night_surcharge ?? 0,
+        }
+      : null;
 
   const [header] = await sql`
     INSERT INTO estimate_headers
       (project_id, base_id, name, status, direct_cost, common_temp_cost,
        site_management_cost, general_management_cost, subtotal, tax_amount, total,
-       rounding_rule_json, warnings, created_by)
+       rounding_rule_json, warnings, port_options, port_extras, created_by)
     VALUES
       (${projectId}, ${baseId}, ${name}, 'draft', ${result.direct_cost},
        ${result.common_temp_cost}, ${result.site_management_cost},
        ${result.general_management_cost}, ${result.subtotal}, ${result.tax_amount},
        ${result.total}, ${JSON.stringify(base.rounding_rules)},
-       ${JSON.stringify(result.warnings)}, ${identity.email})
+       ${JSON.stringify(result.warnings)}, ${port ? JSON.stringify(port) : null},
+       ${result.port_extras ? JSON.stringify(result.port_extras) : null}, ${identity.email})
     RETURNING id
   `;
 
@@ -688,7 +723,7 @@ export async function getEstimate(sql: Sql, id: string): Promise<EstimateDetail 
     SELECT e.id, e.project_id, p.name AS project_name, e.base_id, b.base_code, b.base_name,
            e.name, e.status, e.direct_cost, e.common_temp_cost, e.site_management_cost,
            e.general_management_cost, e.subtotal, e.tax_amount, e.total,
-           e.rounding_rule_json, e.warnings, e.created_by,
+           e.rounding_rule_json, e.warnings, e.port_options, e.port_extras, e.created_by,
            to_char(e.created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS created_at
     FROM estimate_headers e
     JOIN projects p ON p.id = e.project_id
@@ -710,6 +745,8 @@ export async function getEstimate(sql: Sql, id: string): Promise<EstimateDetail 
   const num = (v: unknown) => Number(v);
   return {
     ...header,
+    port_options: header.port_options ?? null,
+    port_extras: header.port_extras ?? null,
     direct_cost: num(header.direct_cost),
     common_temp_cost: num(header.common_temp_cost),
     site_management_cost: num(header.site_management_cost),
@@ -732,6 +769,26 @@ export async function getEstimate(sql: Sql, id: string): Promise<EstimateDetail 
       amount: num(m.amount),
     })) as EstimateMaterialRow[],
   } as EstimateDetail;
+}
+
+async function loadVesselsMap(sql: Sql): Promise<Map<string, VesselInfo>> {
+  const rows = (await sql`
+    SELECT vessel_code, capacity, availability_factor, mobilization_days,
+           standby_rate, hire_rate_per_day
+    FROM vessels WHERE is_active = true
+  `) as DbRow[];
+  return new Map(
+    rows.map((r) => [
+      String(r.vessel_code),
+      {
+        capacity: Number(r.capacity ?? 1),
+        availability_factor: Number(r.availability_factor),
+        mobilization_days: Number(r.mobilization_days ?? 0),
+        standby_rate: Number(r.standby_rate),
+        hire_rate_per_day: Number(r.hire_rate_per_day),
+      },
+    ])
+  );
 }
 
 export async function deleteEstimate(sql: Sql, id: string) {

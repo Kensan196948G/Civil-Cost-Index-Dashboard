@@ -1,5 +1,19 @@
 # リリースノート
 
+## Unreleased（2026-08-05: Phase 5 港湾3工種の積算エンジン対応）
+
+- migration `009_port_estimating.sql`
+  - `estimate_headers` に `port_options` / `port_extras` を追加
+  - PORT-2026 基準に浚渫工（DREDGING）・ケーソン製作・据付（CAISSON）・基礎捨石・被覆消波（RUBBLE_BASE）の工種・歩掛を追加
+  - 歩掛の機械明細に `vessel_id` を設定し、船舶マスタ（損料・供用係数・回航日数・待機率）を参照
+- 積算エンジンに港湾計算を追加
+  - 稼働日数 = ceil(数量 × 船日/単位 ÷ (船舶能力 × 稼働率))
+  - 待機・拘束日数 = ceil(稼働日数 × (1 - 供用係数))
+  - 船舶損料・回航/えい航費を自動算定し、土質補正・夜間/交代制補正に対応
+  - 結果は `port_options` / `port_extras` として積算書Excel「港湾補足」シートにも出力
+- Web: `/estimates` で港湾基準選択時に稼働率・回航日数・土質補正・夜間補正を入力可能
+- テスト115件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: Phase 4 積算エンジン土台）
 
 - migration `008_estimating.sql`

@@ -645,6 +645,21 @@ export interface EstimateMaterial {
 export interface EstimateDetail extends EstimateSummary {
   rounding_rule_json: Record<string, string>;
   warnings: string[];
+  port_options: {
+    operation_rate: number;
+    mobilization_days: number | null;
+    soil_correction: number;
+    night_surcharge: number;
+  } | null;
+  port_extras: {
+    operation_rate: number;
+    work_days: number;
+    standby_days: number;
+    mobilization_days: number;
+    mobilization_cost: number;
+    soil_correction: number;
+    night_surcharge: number;
+  } | null;
   lines: EstimateLine[];
   materials: EstimateMaterial[];
 }

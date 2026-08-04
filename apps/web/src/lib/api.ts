@@ -216,7 +216,17 @@ export const api = {
     request<{ quantity_id: string }>(`/api/quantities/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   deleteQuantity: (id: string) =>
     request<{ deleted: boolean }>(`/api/quantities/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
-  calculateEstimate: (input: { project_id: string; base_id: string; name: string }) =>
+  calculateEstimate: (input: {
+    project_id: string;
+    base_id: string;
+    name: string;
+    port_options?: {
+      operation_rate?: number;
+      mobilization_days?: number | null;
+      soil_correction?: number;
+      night_surcharge?: number;
+    };
+  }) =>
     request<{ estimate: EstimateDetail }>("/api/estimates/calculate", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   estimates: (projectId?: string) =>
     request<{ estimates: EstimateSummary[] }>(`/api/estimates${projectId ? `?project_id=${projectId}` : ""}`),

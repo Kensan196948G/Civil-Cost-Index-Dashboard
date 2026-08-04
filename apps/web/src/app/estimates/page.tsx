@@ -12,6 +12,12 @@ export default function EstimatesPage() {
   const [projectId, setProjectId] = useState("");
   const [baseId, setBaseId] = useState("");
   const [name, setName] = useState("");
+  const [portForm, setPortForm] = useState({
+    operation_rate: "0.7",
+    mobilization_days: "",
+    soil_correction: "0",
+    night_surcharge: "0",
+  });
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
   const [detail, setDetail] = useState<EstimateDetail | null>(null);
   const [suggestion, setSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -50,7 +56,23 @@ export default function EstimatesPage() {
     setNotice(null);
     setSuggestion(null);
     try {
-      const res = await api.calculateEstimate({ project_id: projectId, base_id: baseId, name: name || "積算" });
+      const selectedBase = bases.find((b) => b.id === baseId);
+      const isPort = selectedBase?.category === "port";
+      const res = await api.calculateEstimate({
+        project_id: projectId,
+        base_id: baseId,
+        name: name || "積算",
+        ...(isPort
+          ? {
+              port_options: {
+                operation_rate: Number(portForm.operation_rate),
+                mobilization_days: portForm.mobilization_days ? Number(portForm.mobilization_days) : null,
+                soil_correction: Number(portForm.soil_correction),
+                night_surcharge: Number(portForm.night_surcharge),
+              },
+            }
+          : {}),
+      });
       setDetail(res.estimate);
       setNotice("積算を計算しました（計算はコードで実行、AIは金額に関与していません）。");
       await loadEstimates();
@@ -96,6 +118,8 @@ export default function EstimatesPage() {
   const inputCls = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs font-semibold text-gray-600";
   const money = (v: number) => formatNumber(v);
+  const selectedBase = bases.find((b) => b.id === baseId);
+  const isPort = selectedBase?.category === "port";
 
   return (
     <div className="space-y-4">
@@ -123,6 +147,27 @@ export default function EstimatesPage() {
           <label className={labelCls}>積算名称</label>
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 本工事積算" />
         </div>
+        {isPort && (
+          <div className="flex flex-wrap items-end gap-3 rounded border border-blue-200 bg-blue-50 p-3">
+            <div>
+              <label className={labelCls}>稼働率</label>
+              <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" min={0.1} max={1} step={0.05} value={portForm.operation_rate} onChange={(e) => setPortForm({ ...portForm, operation_rate: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelCls}>回航日数（空欄=マスタ値）</label>
+              <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" min={0} max={60} value={portForm.mobilization_days} onChange={(e) => setPortForm({ ...portForm, mobilization_days: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelCls}>土質補正（%）</label>
+              <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" step={1} value={portForm.soil_correction} onChange={(e) => setPortForm({ ...portForm, soil_correction: e.target.value })} />
+            </div>
+            <div>
+              <label className={labelCls}>夜間・交代制補正（%）</label>
+              <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" step={1} value={portForm.night_surcharge} onChange={(e) => setPortForm({ ...portForm, night_surcharge: e.target.value })} />
+            </div>
+            <span className="text-xs text-blue-700">港湾: 船舶損料・供用係数・回航費・拘束費を自動算定</span>
+          </div>
+        )}
         <button onClick={() => void calculate()} disabled={calculating || !projectId || !baseId} className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
           {calculating ? "計算中…" : "積算を計算"}
         </button>
@@ -172,6 +217,20 @@ export default function EstimatesPage() {
                   </table>
                   {detail.warnings.length > 0 && (
                     <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">{detail.warnings.join(" ")}</div>
+                  )}
+                  {detail.port_options && (
+                    <div className="mt-3 rounded border border-blue-200 bg-blue-50 p-3 text-sm">
+                      <div className="mb-1 font-semibold text-blue-900">港湾補足（作業船・海象条件）</div>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-blue-800 md:grid-cols-4">
+                        <div>稼働率: {detail.port_options.operation_rate}</div>
+                        <div>回航日数: {detail.port_options.mobilization_days ?? "マスタ値"}</div>
+                        <div>土質補正: {detail.port_options.soil_correction}</div>
+                        <div>夜間補正: {detail.port_options.night_surcharge}</div>
+                        <div>稼働日数: {detail.port_extras?.work_days ?? 0}日</div>
+                        <div>待機・拘束: {detail.port_extras?.standby_days ?? 0}日</div>
+                        <div className="col-span-2">回航・えい航費: {money(detail.port_extras?.mobilization_cost ?? 0)}円</div>
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

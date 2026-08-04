@@ -466,4 +466,57 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
     expect(delProj.status).toBe(200);
   });
+
+  it("estimating: port (浚渫) with vessel hire/standby/mobilization", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const basesRes = await get("/api/estimation-bases");
+    const portBase = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "PORT-2026");
+    expect(portBase).toBeDefined();
+    const treesRes = await get(`/api/work-type-trees?base_id=${portBase.id}`);
+    const dredging = treesRes.body.data.trees.find((t: { code: string }) => t.code === "DREDGING");
+    expect(dredging).toBeDefined();
+
+    const proj = await get("/api/projects", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ name: "スモーク 港湾浚渫", work_type: "浚渫", status: "planning" }),
+    });
+    expect(proj.status).toBe(201);
+    const projectId = proj.body.data.project.id;
+
+    const qty = await get("/api/quantities", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, tree_id: dredging.id, quantity: 5600, unit: "m3", condition_json: {} }),
+    });
+    expect(qty.status).toBe(201);
+
+    const calc = await get("/api/estimates/calculate", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({
+        project_id: projectId,
+        base_id: portBase.id,
+        name: "スモーク港湾積算",
+        port_options: { operation_rate: 0.7, mobilization_days: 3, soil_correction: 0.1, night_surcharge: 0 },
+      }),
+    });
+    expect(calc.status).toBe(201);
+    const estimate = calc.body.data.estimate;
+    expect(estimate.port_options).not.toBeNull();
+    expect(estimate.port_extras.work_days).toBe(26); // グラブ10日 + 土運船16日
+    expect(estimate.port_extras.mobilization_cost).toBe(4200000); // 3日×(950,000+450,000)
+    expect(estimate.total).toBeGreaterThan(0);
+    expect(estimate.materials.some((m: { resource_name: string }) => m.resource_name.includes("グラブ浚渫船"))).toBe(true);
+
+    const xlsx = await app!.fetch(new Request(`http://localhost/api/estimates/${estimate.id}/export`), env);
+    expect(xlsx.status).toBe(200);
+    const wb = XLSX.read(await xlsx.arrayBuffer(), { type: "buffer" });
+    expect(wb.SheetNames).toContain("港湾補足");
+
+    const delEst = await get(`/api/estimates/${estimate.id}`, { method: "DELETE", headers: admin });
+    expect(delEst.status).toBe(200);
+    const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+    expect(delProj.status).toBe(200);
+  });
 });

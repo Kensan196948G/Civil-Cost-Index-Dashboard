@@ -9,6 +9,8 @@ export type ResourceItem = {
   unit: string;
   quantity: number;
   unit_price: number;
+  /** 港湾作業船の場合に vessels マスタを参照するためのコード */
+  vessel_id?: string;
 };
 
 export type BreakdownInput = {
@@ -35,6 +37,31 @@ export type RateSet = {
 };
 
 export type RoundingRules = Record<string, string>;
+
+export type VesselInfo = {
+  capacity: number;
+  availability_factor: number;
+  mobilization_days: number;
+  standby_rate: number;
+  hire_rate_per_day: number;
+};
+
+export type PortOptions = {
+  operation_rate: number;
+  mobilization_days?: number | null;
+  soil_correction: number;
+  night_surcharge: number;
+};
+
+export type PortExtras = {
+  operation_rate: number;
+  work_days: number;
+  standby_days: number;
+  mobilization_days: number;
+  mobilization_cost: number;
+  soil_correction: number;
+  night_surcharge: number;
+};
 
 export type EstimateLineResult = {
   tree_id: string;
@@ -71,6 +98,7 @@ export type EstimateResult = {
   tax_amount: number;
   total: number;
   warnings: string[];
+  port_extras: PortExtras | null;
 };
 
 export function applyRounding(value: number, rule: string | undefined): number {
@@ -137,11 +165,16 @@ export function computeEstimate(input: {
   rates: RateSet;
   rounding: RoundingRules;
   taxRate?: number;
+  vessels?: Map<string, VesselInfo>;
+  port?: PortOptions;
 }): EstimateResult {
   const taxRate = input.taxRate ?? 0.1;
   const warnings: string[] = [];
   const lines: EstimateLineResult[] = [];
   const materials: EstimateMaterialResult[] = [];
+  let portWorkDays = 0;
+  let portStandbyDays = 0;
+  let portMobilizationCost = 0;
 
   for (const q of input.quantities) {
     const candidates = input.breakdownsByTree.get(q.tree_id) ?? [];
@@ -171,7 +204,26 @@ export function computeEstimate(input: {
       items: ResourceItem[]
     ) => {
       for (const res of items) {
-        const amount = resourceAmount(q.quantity, res);
+        let amount: number;
+        if (type === "machinery" && res.vessel_id && input.vessels?.has(res.vessel_id)) {
+          const v = input.vessels.get(res.vessel_id)!;
+          const port = input.port ?? { operation_rate: 0.7, soil_correction: 0, night_surcharge: 0 };
+          const capacity = v.capacity > 0 ? v.capacity : 1;
+          const dailyOutput = capacity * port.operation_rate;
+          const workDays = Math.max(1, Math.ceil((q.quantity * (res.quantity || 1)) / dailyOutput));
+          const standbyDays = Math.max(
+            0,
+            Math.ceil(workDays * (1 - v.availability_factor) - 1e-9)
+          );
+          const mobDays = port.mobilization_days ?? v.mobilization_days ?? 0;
+          const rate = res.unit_price || v.hire_rate_per_day;
+          amount = (workDays + standbyDays) * rate + mobDays * rate;
+          portWorkDays += workDays;
+          portStandbyDays += standbyDays;
+          portMobilizationCost += mobDays * rate;
+        } else {
+          amount = resourceAmount(q.quantity, res);
+        }
         materials.push({
           line_index: lines.length,
           resource_type: type,
@@ -204,7 +256,13 @@ export function computeEstimate(input: {
     });
   }
 
-  const directRaw = lines.reduce((a, l) => a + l.direct_cost, 0);
+  let directRaw = lines.reduce((a, l) => a + l.direct_cost, 0);
+  const port = input.port ?? null;
+  if (port) {
+    const laborSum = lines.reduce((a, l) => a + l.labor_cost, 0);
+    if (port.soil_correction) directRaw = directRaw * (1 + port.soil_correction);
+    if (port.night_surcharge) directRaw = directRaw + laborSum * port.night_surcharge;
+  }
   const directCost = applyRounding(directRaw, input.rounding.direct_cost);
   const commonTempCost = applyRounding(
     directCost * input.rates.common_temp,
@@ -225,6 +283,18 @@ export function computeEstimate(input: {
   const taxAmount = applyRounding(subtotal * taxRate, input.rounding.tax);
   const total = applyRounding(subtotal + taxAmount, input.rounding.total);
 
+  const portExtras: PortExtras | null = port
+    ? {
+        operation_rate: port.operation_rate,
+        work_days: portWorkDays,
+        standby_days: portStandbyDays,
+        mobilization_days: port.mobilization_days ?? 0,
+        mobilization_cost: portMobilizationCost,
+        soil_correction: port.soil_correction,
+        night_surcharge: port.night_surcharge,
+      }
+    : null;
+
   return {
     lines,
     materials,
@@ -236,5 +306,6 @@ export function computeEstimate(input: {
     tax_amount: taxAmount,
     total,
     warnings,
+    port_extras: portExtras,
   };
 }

@@ -260,6 +260,30 @@ PoC用の簡易モデルです。作業船ごとに:
 
 結果には算定前提が添付されます。正式な港湾積算基準（令和8年度）の係数に置き換える必要があります。
 
+## POST /api/estimates/calculate（港湾）
+
+`port_options` を指定すると港湾3工種（浚渫/ケーソン/基礎捨石）の船舶損料・供用係数・
+拘束費・回航費を自動算定します。
+
+```json
+{
+  "project_id": "uuid",
+  "base_id": "uuid（PORT-2026）",
+  "name": "本工事積算",
+  "port_options": {
+    "operation_rate": 0.7,
+    "mobilization_days": 3,
+    "soil_correction": 0.1,
+    "night_surcharge": 0.05
+  }
+}
+```
+
+計算式: 稼働日数 = ceil(数量 × 船日/単位 ÷ (船舶能力 × 稼働率))、
+待機日数 = ceil(稼働日数 × (1 - 供用係数))、船舶損料 = (稼働日数+待機日数) × 損料単価、
+回航・えい航費 = 回航日数 × 損料単価。土質補正・夜間補正は直接工事費へ適用され、
+結果は `estimate.port_options` / `estimate.port_extras` に保存されます。
+
 ## POST /api/projects/{id}/simulate
 
 Body:

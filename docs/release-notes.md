@@ -17,6 +17,13 @@
   - `--dry-run` で事前確認可能
 - npm scripts: `secrets:cloudflare` / `secrets:local` / `secrets:sync`
 
+## Unreleased（2026-08-05: 本機LANの環境変数転送修正）
+
+- `server.ts` が新規オプション環境変数（DEEPSEEK / PERPLEXITY / NOTIFY / CF_ACCESS / PDF_CJK / AUTH_TRUST_PROXY）を
+  Node実行時に転送していなかった問題を修正
+- `docker-compose.yml` / `infra/systemd/install.sh` に全オプション環境変数の転送を追加
+- `sync-secrets.mjs` のローカル反映が権限不足の場合、`sudo npm run secrets:local` を案内して終了するよう改善
+
 ## Unreleased（2026-08-05: 残タスク対応・ルートReact化）
 
 前日の対応で残った項目を実装。

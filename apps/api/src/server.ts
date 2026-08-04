@@ -33,8 +33,18 @@ const env = {
   BASIC_AUTH_PASSWORD: process.env.BASIC_AUTH_PASSWORD ?? "",
   FETCH_ALLOWED_HOSTS: process.env.FETCH_ALLOWED_HOSTS ?? "",
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ?? "",
+  DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL ?? "",
+  PERPLEXITY_API_KEY: process.env.PERPLEXITY_API_KEY ?? "",
+  PERPLEXITY_MODEL: process.env.PERPLEXITY_MODEL ?? "",
   AI_MODEL: process.env.AI_MODEL ?? "",
   AI_PROVIDER: process.env.AI_PROVIDER ?? "",
+  NOTIFY_TEAMS_URL: process.env.NOTIFY_TEAMS_URL ?? "",
+  NOTIFY_SLACK_URL: process.env.NOTIFY_SLACK_URL ?? "",
+  CF_ACCESS_TEAM_DOMAIN: process.env.CF_ACCESS_TEAM_DOMAIN ?? "",
+  CF_ACCESS_AUD: process.env.CF_ACCESS_AUD ?? "",
+  PDF_CJK_FONT_URL: process.env.PDF_CJK_FONT_URL ?? "",
+  AUTH_TRUST_PROXY: process.env.AUTH_TRUST_PROXY ?? "",
 };
 
 const port = Number(process.env.API_PORT ?? process.env.PORT ?? "8100");

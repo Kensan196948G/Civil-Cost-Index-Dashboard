@@ -145,7 +145,15 @@ async function syncLocal(dryRun) {
     return;
   }
   let lines = [];
-  if (existsSync(envPath)) lines = readFileSync(envPath, "utf8").split(/\r?\n/);
+  try {
+    if (existsSync(envPath)) lines = readFileSync(envPath, "utf8").split(/\r?\n/);
+  } catch (e) {
+    if (e?.code === "EACCES") {
+      console.error(`\n${envPath} を読み込めません（権限不足）。\nsudo npm run secrets:local で実行してください。`);
+      process.exit(1);
+    }
+    throw e;
+  }
   const seen = new Set();
   for (const [key, value] of entries) {
     const idx = lines.findIndex((l) => new RegExp(`^${key}=`).test(l.trim()));
@@ -156,7 +164,15 @@ async function syncLocal(dryRun) {
     }
     seen.add(key);
   }
-  writeFileSync(envPath, lines.join("\n") + (lines.length ? "\n" : ""), { mode: 0o600 });
+  try {
+    writeFileSync(envPath, lines.join("\n") + (lines.length ? "\n" : ""), { mode: 0o600 });
+  } catch (e) {
+    if (e?.code === "EACCES") {
+      console.error(`\n${envPath} に書き込めません（権限不足）。\nsudo npm run secrets:local で実行してください。`);
+      process.exit(1);
+    }
+    throw e;
+  }
   if (process.env.CCI_SKIP_RESTART !== "1") {
     console.log("cci サービスを再起動します（systemctl restart cci）");
     const res = spawnSync("systemctl", ["restart", "cci"], { encoding: "utf8", stdio: "inherit" });

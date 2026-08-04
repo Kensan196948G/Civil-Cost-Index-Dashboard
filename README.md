@@ -17,6 +17,38 @@
 - 過年度比較・地域差比較
 - 社内説明資料・発注者向け資料の作成
 
+## 🎯 システムの位置付け
+
+本システムは**正式な積算システムではありません**。工事数量から労務・材料・機械の所要量を
+展開し、直接工事費・間接工事費・一般管理費・消費税まで計算する機能は提供しません。
+
+位置付けは「**建設コスト・市況分析基盤（積算前後の判断支援）**」です。
+
+- 入札参加前の市況確認
+- 過年度案件を基準にした概算補正の根拠整理
+- 見積有効期間中の価格変動確認
+- 工事部門・営業・積算部門間の根拠共有
+- 発注者への価格上昇説明・経営会議用の原価リスク把握
+
+画面の表示値はすべて参考情報であり、積算・契約・経営判断の最終根拠には出典元の公表値を
+ご確認ください（本README末尾の免責も参照）。
+
+## 🗂️ データ種別（実単価／指数／動向評価値の区別）
+
+システムではデータを以下の種別で管理し、画面上で「積算参考可／参考のみ」を区別します。
+
+| データ種別 | 例 | 積算利用 |
+| --- | --- | --- |
+| 実単価 | けんせつPlaza 主要建設資材価格、公共工事設計労務単価 | 単価候補として利用可能 |
+| 公的指数 | e-Stat 消費者物価指数、建設物価指数 | 価格補正・傾向分析 |
+| 動向評価値 | 主要建設資材需給・価格動向調査（1〜5段階） | 市況の参考情報のみ |
+| 社内実績単価 | 購買価格、協力会社見積 | 権限管理下で積算参考 |
+| 採用単価 | 積算責任者が決定した単価 | 正式な積算計算に使用 |
+
+`ESTAT_MATERIAL_SUPPLY`（主要建設資材需給・価格動向調査）は**国土交通省**が毎月公表する
+モニター調査の**動向評価値**であり、円/t・円/m³ の実価格でも公的指数でもありません。
+本システムでは「参考のみ」として取扱い、実単価系列と同じグラフで比較する場合も種別バッジを表示します。
+
 ## 🌐 稼働 URL（2026-08-01 現在）
 
 ### 🖥️ 本機（LAN）運用【本番・利用者指示】
@@ -58,10 +90,17 @@ systemd ユニット `cci.service` を登録済み（起動時自動起動）。
 | 📈 時系列分析 | 品目・地域・期間指定のトレンド | `/timeseries/` |
 | 🔄 比較分析 | 複数系列の比較・基準年月100指数化 | `/compare/` |
 | 📋 データテーブル | ソート・ページング・状態表示 | `/table/` |
-| 📤 レポート出力 | CSV出力（PDFは準備中） | `/export/` |
+| 📤 レポート出力 | CSV／Excel／PDF／PowerPoint出力＋積算連携Excel（単価候補・根拠・改定差分） | `/export/` |
+| ▥ 案件影響分析 | 案件・数量・基準単価・調達月を登録し、価格影響額（数量×基準単価×変動率）を下振れ/標準/上振れ・月別に試算 | `/projects/` |
+| ⚓ 港湾コストモデル | 作業船損料・稼働率・回航費・待機費の簡易試算（浚渫／ケーソン／基礎捨石のPoC） | `/port/` |
 | 🗂️ データソース管理 | 公式データソース登録・URL取得（CSV/Excel）・無効化 | `/admin/data-sources/` |
 | 📥 取込履歴 | CSV/Excel/URL取込の成功・失敗・エラー行確認 | `/admin/fetch-jobs/` |
+| ⏰ 定期取得 | Cloudflare Cronによる日次/月次/年次取得・未更新通知（Teams/Slack）・承認後に本番反映 | `/admin/schedules/` |
+| ✓ 承認待ちデータ | 定期取得データの承認・却下（データ承認者／積算責任者） | `/admin/staged/` |
+| ¥ 単価版管理 | 適用開始日・税込/税抜・運賃込み/別・旧版比較・承認・スナップショット | `/admin/price-versions/` |
 | ⚙️ ユーザー設定 | 初期地域・Admin Keyの保存 | `/settings/` |
+| ☺ ユーザー管理 | RBAC（7役割）とCloudflare Accessメール連携 | `/admin/users/` |
+| ✎ 操作監査 | 個人単位の操作監査ログ（監査者／管理者） | `/admin/audit/` |
 | ✦ AI市況ナビ | AI市況サマリー（対象者別）・アラート説明・レポート生成・分析テンプレート | `/ai/` |
 | ◈ AI管理 | データ品質チェック（更新遅延・外れ値・表記揺れ）・品質スコア・AI利用監査ログ | `/admin/ai/` |
 
@@ -89,7 +128,7 @@ Phase 2〜4（データ品質拡張・自然言語検索/RAG・予測/案件影�
 
 | コード | データソース | 種別 | 提供元 | 形式 | 更新頻度 | 取得方法 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ESTAT_MATERIAL_SUPPLY` | e-Stat 主要建設資材需給・価格動向調査 | 資材 | 経済産業省 | Excel | 月次 | URL取込（専用変換で全国平均値を指数化） |
+| `ESTAT_MATERIAL_SUPPLY` | e-Stat 主要建設資材需給・価格動向調査 | 資材 | 国土交通省 | Excel | 月次 | URL取込（専用変換。動向評価値として「参考のみ」） |
 | `ESTAT_CPI` | e-Stat 消費者物価指数 | 指数 | 総務省統計局 | API | 月次 | e-Stat API（appId必須） |
 | `KENPLAZA_MATERIAL` | けんせつPlaza 主要建設資材価格 | 資材 | 経済調査会 | Web | 月次 | Web閲覧・手動取込 |
 | `MLIT_LABOR` | 公共工事設計労務単価 | 労務 | 国土交通省 | PDF/Excel | 年次 | 公表資料の手動取込 |
@@ -107,7 +146,7 @@ flowchart LR
     W1 -->|同一オリジン /api| A[Hono API<br/>Docker / Worker 共通コード]
     W2 -->|https /api| A
     A --> DB[(Neon PostgreSQL<br/>業務データ正本)]
-    ADMIN[管理者] -->|X-Admin-Key| A
+    ADMIN[管理者] -->|X-Admin-Key / Cloudflare Access JWT| A
 ```
 
 ### データフロー
@@ -217,6 +256,8 @@ cd apps/web && wrangler deploy          # Web 静的アセット Worker
 | --- | --- | --- |
 | `DATABASE_URL` | Cloudflare Worker Secret | Neon接続（pooled） |
 | `ADMIN_API_KEY` | Cloudflare Worker Secret | 管理API（X-Admin-Key） |
+| `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | Cloudflare Worker Secret | RBAC（Cloudflare Access JWT検証） |
+| `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL` | Cloudflare Worker Secret | 定期取得・未更新通知 |
 | `CLOUDFLARE_API_TOKEN` | GitHub Actions Secret | デプロイ |
 | `NEXT_PUBLIC_API_BASE_URL` | GitHub Actions Variable | Webビルド時のAPI URL |
 
@@ -233,10 +274,13 @@ cd apps/web && wrangler deploy          # Web 静的アセット Worker
 | [障害対応手順書](docs/incident-response.md) | 重大度定義・ロールバック |
 | [バックアップ・リストア手順書](docs/backup-restore.md) | バックアップ方針・復旧手順 |
 | [リリースノート](docs/release-notes.md) | バージョン履歴・既知の制限 |
+| [外部評価の検証結果と対応方針（2026-08-04）](docs/evaluation-response-2026-08-04.md) | 評価の裏取り・実施済み対応・今後のロードマップ |
 
 ## 🔒 セキュリティ
 
-- 管理APIは `ADMIN_API_KEY`（X-Admin-Key）で保護（本番設定済み）
+- 管理APIは `ADMIN_API_KEY`（X-Admin-Key）に加え、RBAC（7役割）と Cloudflare Access JWT で保護
+- 変更操作（単価版・定期取込・案件・ユーザー管理）は個人単位の操作監査ログに記録
+- 定期取得データは承認後に本番反映（データ承認者／積算責任者）
 - アップロードは拡張子・サイズ・SHA-256重複を検証
 - CSVパース・SQLはパラメータ化（インジェクション対策）
 - 静的サイトにセキュリティヘッダー適用（CSP / X-Frame-Options / nosniff 等）

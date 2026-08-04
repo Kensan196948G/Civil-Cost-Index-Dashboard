@@ -8,18 +8,37 @@ import type {
   AiSummaryResponse,
   AiTemplate,
   ApiEnvelope,
+  AuthMe,
   DataCategory,
   DataSource,
   DataSourceInput,
   DashboardAlert,
   DashboardSummary,
   FetchJob,
+  FetchSchedule,
+  FetchScheduleInput,
   FetchUrlInput,
   Item,
+  OperationAuditLog,
+  PortEstimate,
+  PortWorkType,
+  PriceSnapshot,
+  PriceVersion,
+  PriceVersionComparison,
+  PriceVersionInput,
+  Project,
+  ProjectItem,
+  ProjectSummary,
   Region,
+  SimulationRequest,
+  SimulationResult,
+  StagedIngestion,
   TimeseriesParams,
   TimeseriesResponse,
+  User,
+  Vessel,
 } from "@/types/api";
+import { loadPrefs } from "@/lib/utils";
 
 export class ApiError extends Error {
   code: string;
@@ -90,6 +109,69 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authMe: () => request<AuthMe>("/api/auth/me"),
+  users: () => request<{ users: User[] }>("/api/users", { headers: { "X-Admin-Key": adminKeyHeader() } }),
+  createUser: (input: { email: string; display_name?: string; roles?: string[] }) =>
+    request<User>("/api/users", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  patchUser: (id: string, input: { display_name?: string | null; roles?: string[]; is_active?: boolean }) =>
+    request<User>(`/api/users/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteUser: (id: string) =>
+    request<{ deleted: boolean }>(`/api/users/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  operationAudit: (params?: { actor?: string; action?: string; limit?: number }) =>
+    request<{ logs: OperationAuditLog[] }>(`/api/audit/operations${buildQuery(params ?? {})}`, { headers: { "X-Admin-Key": adminKeyHeader() } }),
+  priceVersions: (params?: { item_id?: string; region_id?: string; status?: string }) =>
+    request<{ price_versions: PriceVersion[] }>(`/api/price-versions${buildQuery(params ?? {})}`),
+  createPriceVersion: (input: PriceVersionInput) =>
+    request<{ price_version: PriceVersion }>("/api/price-versions", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  approvePriceVersion: (id: string) =>
+    request<{ price_version: PriceVersion }>(`/api/price-versions/${id}/approve`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  retirePriceVersion: (id: string) =>
+    request<{ price_version: PriceVersion }>(`/api/price-versions/${id}/retire`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  deletePriceVersion: (id: string) =>
+    request<{ deleted: boolean }>(`/api/price-versions/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  comparePriceVersion: (id: string, oldId?: string) =>
+    request<{ comparison: PriceVersionComparison }>(`/api/price-versions/${id}/compare${oldId ? `?old_id=${oldId}` : ""}`),
+  priceSnapshots: () => request<{ snapshots: PriceSnapshot[] }>("/api/price-snapshots"),
+  createPriceSnapshot: (input: { name: string; description?: string; snapshot_date?: string }) =>
+    request<{ snapshot: PriceSnapshot }>("/api/price-snapshots", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  priceSnapshot: (id: string) => request<{ snapshot: PriceSnapshot }>(`/api/price-snapshots/${id}`),
+  deletePriceSnapshot: (id: string) =>
+    request<{ deleted: boolean }>(`/api/price-snapshots/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  fetchSchedules: () => request<{ schedules: FetchSchedule[] }>("/api/fetch-schedules", { headers: { "X-Admin-Key": adminKeyHeader() } }),
+  createFetchSchedule: (input: FetchScheduleInput) =>
+    request<{ schedule_id: string }>("/api/fetch-schedules", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  patchFetchSchedule: (id: string, input: Partial<FetchScheduleInput>) =>
+    request<{ schedule_id: string }>(`/api/fetch-schedules/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  runFetchSchedule: (id: string) =>
+    request<{ result: Record<string, unknown> }>(`/api/fetch-schedules/${id}/run`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  deleteFetchSchedule: (id: string) =>
+    request<{ deleted: boolean }>(`/api/fetch-schedules/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  stagedIngestions: (status?: string) =>
+    request<{ staged: StagedIngestion[] }>(`/api/staged-ingestions${status ? `?status=${status}` : ""}`, { headers: { "X-Admin-Key": adminKeyHeader() } }),
+  approveStaged: (id: string) =>
+    request<{ result: Record<string, unknown> }>(`/api/staged-ingestions/${id}/approve`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  rejectStaged: (id: string) =>
+    request<{ rejected: boolean }>(`/api/staged-ingestions/${id}/reject`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  deleteStaged: (id: string) =>
+    request<{ deleted: boolean }>(`/api/staged-ingestions/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  projects: () => request<{ projects: ProjectSummary[] }>("/api/projects"),
+  createProject: (input: Partial<Project>) =>
+    request<{ project: Project }>("/api/projects", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  project: (id: string) => request<{ project: Project }>(`/api/projects/${id}`),
+  patchProject: (id: string, input: Partial<Project>) =>
+    request<{ project: Project }>(`/api/projects/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteProject: (id: string) =>
+    request<{ deleted: boolean }>(`/api/projects/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  addProjectItem: (projectId: string, input: Partial<ProjectItem>) =>
+    request<{ item_id: string }>(`/api/projects/${projectId}/items`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteProjectItem: (projectId: string, itemId: string) =>
+    request<{ deleted: boolean }>(`/api/projects/${projectId}/items/${itemId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  simulateProject: (projectId: string, input: SimulationRequest) =>
+    request<{ simulation: SimulationResult }>(`/api/projects/${projectId}/simulate`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  portVessels: () => request<{ vessels: Vessel[] }>("/api/port-models/vessels"),
+  portWorkTypes: () => request<{ work_types: PortWorkType[] }>("/api/port-models/work-types"),
+  portEstimate: (input: { work_type_id: string; quantity: number; operation_rate?: number; mobilization_days?: number }) =>
+    request<{ estimate: PortEstimate }>("/api/port-models/estimate", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   regions: () => request<{ regions: Region[] }>("/api/regions"),
   items: (category?: DataCategory) =>
     request<{ items: Item[] }>(`/api/items${category ? `?category=${category}` : ""}`),
@@ -133,6 +215,11 @@ export const api = {
     });
   },
   csvExportUrl: (params: TimeseriesParams) => `/api/export/csv${buildQuery(toCsvParams(params))}`,
+  xlsxExportUrl: (params: TimeseriesParams) => `/api/export/xlsx${buildQuery(toCsvParams(params))}`,
+  pdfExportUrl: (params: TimeseriesParams) => `/api/export/pdf${buildQuery(toCsvParams(params))}`,
+  pptxExportUrl: (params: TimeseriesParams) => `/api/export/pptx${buildQuery(toCsvParams(params))}`,
+  estimateLinkExportUrl: (snapshotId?: string) =>
+    `/api/export/estimate-link${snapshotId ? `?snapshot_id=${snapshotId}` : ""}`,
   aiStatus: () => request<AiStatus>("/api/ai/status"),
   aiTemplates: () => request<{ templates: AiTemplate[] }>("/api/ai/templates"),
   aiSummary: (params?: { audience?: AiAudience; region_id?: string }) =>
@@ -161,6 +248,10 @@ export const api = {
       headers: { "X-Admin-Key": adminKey },
     }),
 };
+
+function adminKeyHeader(): string {
+  return loadPrefs().adminKey ?? "";
+}
 
 export const CATEGORY_LABELS: Record<DataCategory, string> = {
   MATERIAL_PRICE: "資材価格",

@@ -104,7 +104,8 @@ export async function ingestRows(input: IngestInput): Promise<IngestResult> {
 
   const mapped = mapRowsToCanonical(rows);
   const items = await sql`
-    SELECT id, item_code, item_name, category, default_unit FROM items WHERE is_active = true
+    SELECT id, item_code, item_name, category, default_unit, data_kind, estimate_usable
+    FROM items WHERE is_active = true
   `;
   const regions = await sql`
     SELECT id, region_code, region_name FROM regions WHERE is_active = true
@@ -148,13 +149,15 @@ export async function ingestRows(input: IngestInput): Promise<IngestResult> {
     await sql`
       INSERT INTO time_series_values
         (data_source_id, data_type, item_id, region_id, period_type, period_date,
-         value, unit, original_item_name, original_region_name, value_status, note)
+         value, unit, data_kind, estimate_usable, original_item_name, original_region_name,
+         value_status, note)
       VALUES
         (${dataSourceId}, ${item.category}, ${item.id}, ${region.id}, 'monthly',
-         ${`${period}-01`}::date, ${rawValue}, ${unit || null}, ${itemName}, ${regionName},
-         ${valueStatus}, ${row.note || null})
+         ${`${period}-01`}::date, ${rawValue}, ${unit || null}, ${item.data_kind},
+         ${item.estimate_usable}, ${itemName}, ${regionName}, ${valueStatus}, ${row.note || null})
       ON CONFLICT (data_source_id, data_type, item_id, region_id, period_date, unit)
       DO UPDATE SET value = EXCLUDED.value, value_status = EXCLUDED.value_status,
+                    data_kind = EXCLUDED.data_kind, estimate_usable = EXCLUDED.estimate_usable,
                     note = EXCLUDED.note, updated_at = now()
     `;
     successRows++;

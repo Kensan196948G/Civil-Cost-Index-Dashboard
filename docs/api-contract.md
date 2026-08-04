@@ -35,9 +35,54 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | POST | `/api/fetch-jobs` | Fetch from public URL and ingest (admin) |
 | POST | `/api/uploads` | Upload CSV/Excel (admin, multipart) |
 | GET | `/api/export/csv` | CSV export (same filters as /timeseries) |
-| POST | `/api/export/report` | Minimal PDF report (optional) |
+| GET | `/api/export/xlsx` | Excel export（概要／明細／出典の3シート・データ種別・積算利用可否付き） |
+| GET | `/api/export/pdf` | PDF report（日本語フォント埋め込み） |
+| GET | `/api/export/pptx` | PowerPoint report（概要＋系列別スライド） |
+| GET | `/api/export/estimate-link` | 積算連携Excel（単価候補・根拠・改定差分・スナップショット） |
+| POST | `/api/export/report` | PDF report（standalone互換ボディ） |
+| GET | `/api/port-models/vessels` | 港湾作業船マスタ（PoC） |
+| GET | `/api/port-models/work-types` | 港湾工種・船舶構成（PoC） |
+| POST | `/api/port-models/estimate` | 港湾工事コスト試算（PoC） |
+| GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
+| GET | `/api/users` | ユーザー一覧（system_admin） |
+| POST | `/api/users` | ユーザー作成（system_admin） |
+| PATCH | `/api/users/{id}` | ユーザー更新・役割変更（system_admin） |
+| GET | `/api/audit/operations` | 操作監査ログ（auditor / system_admin） |
+| GET | `/api/price-versions` | 単価版一覧 |
+| POST | `/api/price-versions` | 単価版（下書き）作成 |
+| PATCH | `/api/price-versions/{id}` | 単価版更新（下書きのみ） |
+| POST | `/api/price-versions/{id}/approve` | 単価版承認（data_approver / estimating_manager / system_admin） |
+| POST | `/api/price-versions/{id}/retire` | 単価版失効 |
+| GET | `/api/price-versions/{id}/compare` | 旧版との比較（`old_id` 任意） |
+| GET | `/api/price-snapshots` | スナップショット一覧 |
+| POST | `/api/price-snapshots` | 承認済み単価からスナップショット作成 |
+| GET | `/api/price-snapshots/{id}` | スナップショット明細 |
+| GET | `/api/fetch-schedules` | 定期取得スケジュール一覧 |
+| POST | `/api/fetch-schedules` | スケジュール作成 |
+| PATCH | `/api/fetch-schedules/{id}` | スケジュール更新 |
+| POST | `/api/fetch-schedules/{id}/run` | スケジュール即時実行 |
+| GET | `/api/staged-ingestions` | 承認待ちデータ一覧 |
+| POST | `/api/staged-ingestions/{id}/approve` | 承認して本番反映 |
+| POST | `/api/staged-ingestions/{id}/reject` | 却下 |
+| GET | `/api/projects` | 案件一覧 |
+| POST | `/api/projects` | 案件作成 |
+| GET | `/api/projects/{id}` | 案件詳細（明細付き） |
+| PATCH | `/api/projects/{id}` | 案件更新 |
+| DELETE | `/api/projects/{id}` | 案件削除 |
+| POST | `/api/projects/{id}/items` | 案件明細追加 |
+| PATCH | `/api/projects/{id}/items/{itemId}` | 案件明細更新 |
+| DELETE | `/api/projects/{id}/items/{itemId}` | 案件明細削除 |
+| POST | `/api/projects/{id}/simulate` | 価格影響シミュレーション |
+| DELETE | `/api/users/{id}` | ユーザー削除（system_admin） |
+| DELETE | `/api/price-versions/{id}` | 単価版削除（estimating_manager / system_admin） |
+| DELETE | `/api/price-snapshots/{id}` | スナップショット削除 |
+| DELETE | `/api/fetch-schedules/{id}` | スケジュール削除 |
+| DELETE | `/api/staged-ingestions/{id}` | 承認待ちデータ削除 |
 
 Admin endpoints require `X-Admin-Key: <ADMIN_API_KEY>` when `ADMIN_API_KEY` is configured.
+RBAC を有効化すると、`CF-Access-Jwt-Assertion`（Cloudflare Access）のメールアドレスで
+`users` テーブルの役割を参照します。役割: viewer / data_ingester / data_approver / estimator /
+estimating_manager / auditor / system_admin。
 
 ## GET /api/regions
 
@@ -50,10 +95,13 @@ Response `data`:
 
 Query: `category` (optional: MATERIAL_PRICE / LABOR_COST / PRICE_INDEX / FUEL_PRICE / OTHER)
 
-Response `data`:
+Response `data`（`data_kind` / `estimate_usable` は migration 005 以降）:
 ```json
-{ "items": [ { "id": "uuid", "item_code": "STEEL_H", "item_name": "H形鋼", "category": "MATERIAL_PRICE", "sub_category": "鋼材", "standard_name": "SS400 H-200x100", "default_unit": "円/t", "display_order": 1, "is_active": true } ] }
+{ "items": [ { "id": "uuid", "item_code": "STEEL_H", "item_name": "H形鋼", "category": "MATERIAL_PRICE", "sub_category": "鋼材", "standard_name": "SS400 H-200x100", "default_unit": "円/t", "data_kind": "actual_price", "estimate_usable": true, "display_order": 1, "is_active": true } ] }
 ```
+
+`data_kind`: `actual_price`（実単価）/ `official_index`（公的指数）/ `trend_assessment`（動向評価値・参考のみ）/ `internal_actual`（社内実績単価）/ `adopted_price`（採用単価）。
+`estimate_usable: false` の系列は積算の単価根拠に使用できません。
 
 ## GET /api/dashboard/summary
 
@@ -90,6 +138,8 @@ Response `data`:
       "unit": "index",
       "source_name": "公開統計",
       "source_url": "https://example.jp",
+      "data_kind": "actual_price",
+      "estimate_usable": true,
       "points": [
         { "period": "2021-04", "value": 100.0, "raw_value": 85000, "mom_rate": null, "yoy_rate": null, "status": "confirmed" }
       ]
@@ -123,10 +173,10 @@ Priority: high = |yoy|>=20, medium = |yoy|>=10 or |mom|>=5, low = 3+ consecutive
 
 GET `/api/data-sources` response `data`:
 ```json
-{ "data_sources": [ { "id": "uuid", "source_code": "MLIT_STAT", "source_name": "国土交通省 統計", "source_type": "material", "provider_name": "国土交通省", "source_url": "https://...", "file_format": "csv", "update_frequency": "monthly", "license_note": "...", "is_active": true, "last_fetched_at": null } ] }
+{ "data_sources": [ { "id": "uuid", "source_code": "MLIT_STAT", "source_name": "国土交通省 統計", "source_type": "material", "provider_name": "国土交通省", "source_url": "https://...", "file_format": "csv", "update_frequency": "monthly", "license_note": "...", "data_kind": "actual_price", "estimate_usable": true, "redistribution_note": "...", "is_active": true, "last_fetched_at": null } ] }
 ```
 
-POST `/api/data-sources` body (admin): `{ source_code, source_name, source_type, provider_name, source_url?, file_format?, update_frequency?, license_note?, is_active? }`
+POST `/api/data-sources` body (admin): `{ source_code, source_name, source_type, provider_name, source_url?, file_format?, update_frequency?, license_note?, data_kind?, estimate_usable?, redistribution_note?, is_active? }`
 
 PATCH `/api/data-sources/{id}` body (admin): partial update of the above.
 
@@ -156,6 +206,67 @@ CSV accepted columns (flexible, Japanese/English headers): 年月/period, 品目
 ## GET /api/export/csv
 
 Query: same as `/api/timeseries`. Returns `text/csv; charset=utf-8` with UTF-8 BOM and Japanese column names: 年月, データ分類, 品目, 地域, 値, 単位, 前月比, 前年比, 状態, 出典, 取得日時.
+
+## GET /api/export/xlsx
+
+Query: same as `/api/timeseries`. Returns `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+シート構成: 概要（出力条件・注意事項）／明細（データ種別・積算利用可否を含む）／出典（URL・ライセンス・再配布注記）。
+
+## GET /api/export/pdf
+
+Query: same as `/api/timeseries`. 日本語フォントをサーバー側で取得・埋め込みます。
+フォントURLは環境変数 `PDF_CJK_FONT_URL`（TTF/OTF）で指定可能。未設定時はデフォルトCDNを使用し、
+取得できない場合は 502 と設定案を返します。
+
+## GET /api/export/pptx
+
+Query: same as `/api/timeseries`. 概要スライド＋系列別スライド（年月・値・前月比・前年比・状態）を返します。
+
+## GET /api/export/estimate-link
+
+Query: `snapshot_id`（任意）。承認済み単価版を「品目コード・出典・適用期間・税込/税抜・運賃込み/別」付きで
+出力し、既存積算システム／Excelテンプレートへの受け渡しに使います。シート: 単価候補／改定差分／
+スナップショット（指定時）／注意事項。
+
+## POST /api/port-models/estimate
+
+Body: `{ work_type_id, quantity, operation_rate?, mobilization_days? }`
+
+PoC用の簡易モデルです。作業船ごとに:
+- 1日能力 = 能力 × 稼働率
+- 稼働日数 = ceil(数量 × 単位あたり船日 ÷ 1日能力)
+- 待機日数 = ceil(稼働日数 × (1 - 供用係数))
+- 損料 = (稼働日数 + 待機日数) × 損料単価、回航費 = 回航日数 × 損料単価
+
+結果には算定前提が添付されます。正式な港湾積算基準（令和8年度）の係数に置き換える必要があります。
+
+## POST /api/projects/{id}/simulate
+
+Body:
+```json
+{
+  "scenarios": [
+    { "name": "下振れ", "delta": -0.1 },
+    { "name": "標準", "delta": 0 },
+    { "name": "上振れ", "delta": 0.1 }
+  ],
+  "index_item_id": "uuid（任意: 公的指数の品目）",
+  "base_period": "2025-01"
+}
+```
+
+計算式: 影響額 = 数量 × 基準単価 × 適用変動率。
+`index_item_id` 指定時は基準年月→調達予定月の実データ変動率にシナリオ係数を加算します。
+データ不足時はシナリオ係数のみで計算し `warnings` に明記します。
+
+## 定期取得（Cloudflare Cron）
+
+Worker の Cron トリガー（毎日 16:00 UTC = 01:00 JST）で `scheduled` ハンドラが起動し、
+`fetch_schedules` のうち `next_run_at` が到来したスケジュールを実行します。
+`approval_required = true` の場合は `staged_ingestions`（承認待ち）に保存し、
+`POST /api/staged-ingestions/{id}/approve` で本番反映します。
+未更新・取得失敗は `notify_channels`（teams / slack）へ Webhook 通知されます
+（環境変数: `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL`）。
 
 ## POST /api/export/report
 

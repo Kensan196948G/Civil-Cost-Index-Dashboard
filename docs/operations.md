@@ -77,6 +77,19 @@ cd apps/api && npx wrangler tail cci-api-production
 
 詳細は [データ取得手順書](./data-acquisition.md) を参照してください。
 
+### 5.1 定期取得（自動・承認ワークフロー）
+
+1. `/admin/schedules/` でデータソースの取得スケジュール（日次/月次/年次）を登録
+2. Cloudflare Cron（毎日 01:00 JST）が自動実行し、`approval_required=true` の場合は承認待ちへ格納
+3. `/admin/staged/` でデータ承認者・積算責任者が内容を確認し「承認して反映」または「却下」
+4. 未更新・取得失敗・重複は `/admin/schedules/` の通知先（Teams/Slack）へ通知
+
+必要な環境変数（Cloudflare Worker Secret）:
+
+- `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL`（通知先。未設定時はログのみ記録）
+- `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD`（RBAC用のCloudflare Access設定）
+- `PDF_CJK_FONT_URL`（PDF出力の日本語フォントURL。未設定時はデフォルトCDNを使用）
+
 URL取込 CLI:
 
 ```bash

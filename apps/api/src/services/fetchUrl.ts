@@ -256,6 +256,41 @@ export async function fetchFromUrl(
   input: { dataSourceId: string; url?: string },
   env?: { FETCH_ALLOWED_HOSTS?: string }
 ): Promise<IngestResult> {
+  const parsed = await downloadAndParseUrl(sql, input, env);
+  if (parsed.duplicate) {
+    const err = new Error("同一内容のファイルが既に登録されています。");
+    (err as Error & { status?: number }).status = 409;
+    throw err;
+  }
+  return ingestRows({
+    sql,
+    dataSourceId: input.dataSourceId,
+    rows: parsed.rows,
+    fileName: parsed.fileName,
+    fileHash: parsed.fileHash,
+    jobType: "manual_fetch",
+    originalUrl: parsed.finalUrl,
+    fileFormat: parsed.format,
+    extraErrorRows: parsed.extraErrorRows,
+  });
+}
+
+export type DownloadedParseResult = {
+  source: { id: string; source_code: string; source_name: string; source_url: string | null };
+  rows: CsvRow[];
+  extraErrorRows: Array<{ row: number; column: string; reason: string }>;
+  fileName: string;
+  fileHash: string;
+  finalUrl: string;
+  format: "csv" | "xlsx";
+  duplicate: boolean;
+};
+
+export async function downloadAndParseUrl(
+  sql: Sql,
+  input: { dataSourceId: string; url?: string },
+  env?: { FETCH_ALLOWED_HOSTS?: string }
+): Promise<DownloadedParseResult> {
   const sourceRows = await sql`
     SELECT id, source_code, source_name, source_url FROM data_sources WHERE id = ${input.dataSourceId}
   `;
@@ -264,7 +299,7 @@ export async function fetchFromUrl(
     (err as Error & { status?: number }).status = 404;
     throw err;
   }
-  const source = sourceRows[0];
+  const source = sourceRows[0] as DownloadedParseResult["source"];
   const target = (input.url ?? "").trim() || String(source.source_url ?? "");
   if (!target) {
     const err = new Error("取得URLが未設定です（URLを指定するか、データソースの source_url を登録してください）。");
@@ -304,20 +339,25 @@ export async function fetchFromUrl(
     WHERE data_source_id = ${input.dataSourceId} AND file_hash = ${fileHash}
   `;
   if (dup.length > 0) {
-    const err = new Error("同一内容のファイルが既に登録されています。");
-    (err as Error & { status?: number }).status = 409;
-    throw err;
+    return {
+      source: source as DownloadedParseResult["source"],
+      rows,
+      extraErrorRows,
+      fileName: deriveFileName(finalUrl, format),
+      fileHash,
+      finalUrl,
+      format,
+      duplicate: true,
+    };
   }
-
-  return ingestRows({
-    sql,
-    dataSourceId: input.dataSourceId,
+  return {
+    source: source as DownloadedParseResult["source"],
     rows,
+    extraErrorRows,
     fileName: deriveFileName(finalUrl, format),
     fileHash,
-    jobType: "manual_fetch",
-    originalUrl: finalUrl,
-    fileFormat: format,
-    extraErrorRows,
-  });
+    finalUrl,
+    format,
+    duplicate: false,
+  };
 }

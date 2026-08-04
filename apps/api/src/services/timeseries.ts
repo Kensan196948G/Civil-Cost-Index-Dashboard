@@ -61,10 +61,10 @@ export async function fetchRawRows(sql: Sql, p: TimeseriesParams): Promise<RawRo
   const rows = await sql(
     `
       SELECT t.id, t.data_source_id, t.data_type, t.item_id, i.item_name, i.item_code,
-             t.region_id, r.region_name, r.region_code,
+             t.data_kind, t.estimate_usable, t.region_id, r.region_name, r.region_code,
              to_char(t.period_date, 'YYYY-MM') AS period_date,
              t.value::text AS value, t.unit, t.value_status, t.note,
-             ds.source_name, ds.source_url, t.source_file_id,
+             ds.source_name, ds.source_url, ds.license_note, ds.redistribution_note, t.source_file_id,
              to_char(t.updated_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS updated_at
       FROM time_series_values t
       JOIN items i ON i.id = t.item_id
@@ -104,6 +104,8 @@ export function rawRowsToSeries(
       unit: useNormalized ? "index" : (first.unit ?? ""),
       source_name: first.source_name,
       source_url: first.source_url,
+      data_kind: first.data_kind,
+      estimate_usable: first.estimate_usable,
       points: sorted.map((r) => {
         const raw = Number(r.value);
         const normalizedValue = normalized.values.get(r.period_date);

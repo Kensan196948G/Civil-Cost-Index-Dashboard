@@ -7,7 +7,7 @@
 
 | コード | 名称 | 種別 | 提供元 | 形式 | 更新頻度 | 主URL | 取得方法 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ESTAT_MATERIAL_SUPPLY` | e-Stat 主要建設資材需給・価格動向調査 | 資材 | 経済産業省 | Excel | 月次 | [e-Stat 検索](https://www.e-stat.go.jp/stat-search?query=%E4%B8%BB%E8%A6%81%E5%BB%BA%E8%A8%AD%E8%B3%87%E6%9D%90%E9%9C%80%E7%B5%A6%E3%83%BB%E4%BE%A1%E6%A0%BC%E5%8B%95%E5%90%91%E8%AA%BF%E6%9F%BB&layout=dataset) | URL取込（専用変換） |
+| `ESTAT_MATERIAL_SUPPLY` | e-Stat 主要建設資材需給・価格動向調査 | 資材 | 国土交通省 | Excel | 月次 | [e-Stat 検索](https://www.e-stat.go.jp/stat-search?query=%E4%B8%BB%E8%A6%81%E5%BB%BA%E8%A8%AD%E8%B3%87%E6%9D%90%E9%9C%80%E7%B5%A6%E3%83%BB%E4%BE%A1%E6%A0%BC%E5%8B%95%E5%90%91%E8%AA%BF%E6%9F%BB&layout=dataset) | URL取込（専用変換） |
 | `ESTAT_CPI` | e-Stat 消費者物価指数 | 指数 | 総務省統計局 | API | 月次 | [e-Stat 統計表](https://www.e-stat.go.jp/stat-search/files?toukei=00200573) | e-Stat API（appId必須） |
 | `KENPLAZA_MATERIAL` | けんせつPlaza 主要建設資材価格（市場） | 資材 | 経済調査会 | Web | 月次 | [けんせつPlaza market](https://www.kensetsu-plaza.com/market) | Web閲覧・手動取込 |
 | `MLIT_LABOR` | 公共工事設計労務単価 | 労務 | 国土交通省 | PDF/Excel | 年次 | [令和7年3月適用版プレスリリース](https://www.mlit.go.jp/report/press/tochi_fudousan_kensetsugyo14_hh_000001_00261.html) | 公表資料の手動取込 |
@@ -17,6 +17,21 @@
 > 価格情報APIとしては未確認のため、登録・取込対象にはしていません（要確認事項）。
 
 ## 2. 取込方式の使い分け
+
+### 2.0 データ種別の管理（実単価／指数／動向評価値）
+
+本システムでは、取込データを「データ種別」と「積算利用可否」で管理します。
+
+| データ種別 | 例 | 積算利用 |
+| --- | --- | --- |
+| 実単価（`actual_price`） | けんせつPlaza 主要建設資材価格、公共工事設計労務単価 | 単価候補として利用可能 |
+| 公的指数（`official_index`） | 消費者物価指数、建設物価指数 | 価格補正・傾向分析 |
+| 動向評価値（`trend_assessment`） | 主要建設資材需給・価格動向調査（1〜5段階） | 市況の参考情報のみ |
+| 社内実績単価（`internal_actual`） | 購買価格、協力会社見積 | 権限管理下で積算参考 |
+| 採用単価（`adopted_price`） | 積算責任者が決定した単価 | 正式な積算計算に使用 |
+
+`estimate_usable = false` の系列は画面・API・Excel出力で「参考のみ」と表示され、
+積算の単価根拠としては利用できません（データガバナンス上の制約）。
 
 ### 2.1 URLから取得（推奨）
 
@@ -61,8 +76,11 @@ curl -X POST http://192.168.0.185:3000/api/fetch-jobs \
 
 ### 3.1 e-Stat 主要建設資材需給・価格動向調査（専用変換あり）
 
-経済産業省が毎月公表する調査で、主要資材の**価格動向・需給動向・在庫状況**を都道府県別に収録しています
+国土交通省が毎月公表する調査（建設資材モニター調査）で、主要資材の**価格動向・需給動向・在庫状況**を都道府県別に収録しています
 （指数は1〜5段階。数値は円建ての市場価格ではありません）。
+
+> **提供元**: 国土交通省（経済産業省ではありません。誤記載を修正済み: 2026-08-04）
+> **扱い**: `data_kind = trend_assessment` / `estimate_usable = false`（参考のみ）
 
 - e-Stat のファイル検索で最新月の Excel（表-1 / 表-2）をダウンロードします。
 - 本システムの URL取込では、データソース `ESTAT_MATERIAL_SUPPLY` を選択すると専用変換が働き、

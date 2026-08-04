@@ -20,6 +20,18 @@ export type Env = {
   AI_PROVIDER?: string;
   /** Workers AI バインディング（Workersデプロイ時のみ） */
   AI?: WorkersAiBinding;
+  /** 任意: Cloudflare Access のチームドメイン（例: example.cloudflareaccess.com） */
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  /** 任意: Cloudflare Access アプリケーションの Audience（aud） */
+  CF_ACCESS_AUD?: string;
+  /** 任意: リバースプロキシ/テスト用に X-User-Email / X-User-Roles を信頼する（true時のみ） */
+  AUTH_TRUST_PROXY?: string;
+  /** 任意: Teams 受信Webhook URL */
+  NOTIFY_TEAMS_URL?: string;
+  /** 任意: Slack 受信Webhook URL */
+  NOTIFY_SLACK_URL?: string;
+  /** 任意: PDF日本語フォント（TTF/OTF）の取得URL。未設定時はデフォルトCDNを使用 */
+  PDF_CJK_FONT_URL?: string;
 };
 
 export type Region = {
@@ -40,6 +52,8 @@ export type Item = {
   sub_category: string | null;
   standard_name: string | null;
   default_unit: string | null;
+  data_kind: string;
+  estimate_usable: boolean;
   display_order: number | null;
   is_active: boolean;
 };
@@ -54,6 +68,9 @@ export type DataSource = {
   file_format: string | null;
   update_frequency: string | null;
   license_note: string | null;
+  data_kind: string;
+  estimate_usable: boolean;
+  redistribution_note: string | null;
   is_active: boolean;
   last_fetched_at: string | null;
   created_at: string;
@@ -75,6 +92,8 @@ export type Series = {
   unit: string;
   source_name: string;
   source_url: string | null;
+  data_kind: string;
+  estimate_usable: boolean;
   points: TimeSeriesPoint[];
 };
 
@@ -98,6 +117,8 @@ export type RawRow = {
   item_id: string;
   item_name: string;
   item_code: string;
+  data_kind: string;
+  estimate_usable: boolean;
   region_id: string;
   region_name: string;
   region_code: string;
@@ -108,6 +129,8 @@ export type RawRow = {
   note: string | null;
   source_name: string;
   source_url: string | null;
+  license_note: string | null;
+  redistribution_note: string | null;
   source_file_id: string | null;
   updated_at: string;
 };

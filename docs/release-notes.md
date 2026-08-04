@@ -1,5 +1,14 @@
 # リリースノート
 
+## Unreleased（2026-08-05: 夜間施工・交代制・超勤補正）
+
+- migration `012_shift_rules.sql`: `work_shift_rules`（種別・時間帯・労務/機械の割増率・適用条件）とサンプル3件（夜間22-5時、交代制2班、超勤2時間）
+- 積算エンジン: `shift_rules` を指定すると労務・機械の割増率を合算して直接工事費へ適用
+- API: `/api/port-models/shift-rules`（一覧・登録・更新）
+- `/estimates`: 港湾オプションに補正ルールの複数選択を追加
+- `/port`: 補正ルールマスタの一覧と登録を追加
+- テスト119件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: 土質・浚渫土量・運搬距離・土捨場/処分費）
 
 - migration `011_dredging_conditions.sql`

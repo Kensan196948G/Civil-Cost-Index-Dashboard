@@ -252,4 +252,75 @@ describe("computeEstimate", () => {
     });
     expect(result.total).toBe(28158240);
   });
+
+  it("applies night/rotation/overtime shift surcharges", () => {
+    const result = computeEstimate({
+      quantities: [
+        {
+          tree_id: "p1",
+          tree_code: "DREDGING",
+          tree_name: "浚渫工",
+          unit: "m3",
+          quantity: 5600,
+          condition_json: {},
+        },
+      ],
+      breakdownsByTree: new Map([
+        [
+          "p1",
+          [
+            {
+              id: "pb1",
+              condition_json: {},
+              labor: [{ name: "普通作業員（船上）", unit: "人日", quantity: 0.01, unit_price: 24000 }],
+              material: [],
+              machinery: [
+                { name: "グラブ浚渫船 8m3", unit: "日", quantity: 1, unit_price: 950000, vessel_id: "GRAB_8M3" },
+              ],
+            },
+          ],
+        ],
+      ]),
+      rates: { common_temp: 0, site_management: 0, general_management: 0 },
+      rounding: {
+        direct_cost: "yen_down",
+        common_temp: "yen_down",
+        site_management: "yen_down",
+        general_management: "yen_down",
+        subtotal: "yen_down",
+        tax: "yen_down",
+        total: "yen_down",
+      },
+      taxRate: 0.1,
+      vessels: new Map([
+        [
+          "GRAB_8M3",
+          {
+            capacity: 800,
+            availability_factor: 0.7,
+            mobilization_days: 3,
+            standby_rate: 0.5,
+            hire_rate_per_day: 950000,
+          },
+        ],
+      ]),
+      port: {
+        operation_rate: 0.7,
+        mobilization_days: 3,
+        soil_correction: 0,
+        night_surcharge: 0,
+        shift_rules: ["NIGHT_22_05", "ROTATION_2"],
+        shift_labor_surcharge: 0.75,
+        shift_machinery_surcharge: 0.55,
+      },
+    });
+    // 労務 1,344,000 × 1.75 = 2,352,000 / 機械 15,200,000 × 1.55 = 23,560,000 → 25,912,000
+    expect(result.direct_cost).toBe(25912000);
+    expect(result.port_extras).toMatchObject({
+      shift_labor_surcharge: 0.75,
+      shift_machinery_surcharge: 0.55,
+      shift_rules: ["NIGHT_22_05", "ROTATION_2"],
+    });
+    expect(result.total).toBe(28503200);
+  });
 });

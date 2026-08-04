@@ -60,6 +60,12 @@ export type PortOptions = {
   soil_type_code?: string | null;
   spoil_ground_code?: string | null;
   transport_distance_km?: number | null;
+  /** 適用する補正ルールコード（夜間/交代制/超勤） */
+  shift_rules?: string[];
+  /** 労務補正率合計（ルールマスタから解決） */
+  shift_labor_surcharge?: number;
+  /** 機械補正率合計（ルールマスタから解決） */
+  shift_machinery_surcharge?: number;
 };
 
 export type PortExtras = {
@@ -76,6 +82,9 @@ export type PortExtras = {
   spoil_ground_code: string | null;
   transport_distance_km: number | null;
   disposal_cost: number;
+  shift_labor_surcharge: number;
+  shift_machinery_surcharge: number;
+  shift_rules: string[];
 };
 
 export type EstimateLineResult = {
@@ -272,10 +281,14 @@ export function computeEstimate(input: {
     });
   }
 
-  let directRaw = lines.reduce((a, l) => a + l.direct_cost, 0);
   const port = input.port ?? null;
+  const shiftLabor = port?.shift_labor_surcharge ?? 0;
+  const shiftMachinery = port?.shift_machinery_surcharge ?? 0;
+  const laborSum = lines.reduce((a, l) => a + l.labor_cost, 0);
+  const materialSum = lines.reduce((a, l) => a + l.material_cost, 0);
+  const machinerySum = lines.reduce((a, l) => a + l.machinery_cost, 0);
+  let directRaw = laborSum * (1 + shiftLabor) + materialSum + machinerySum * (1 + shiftMachinery);
   if (port) {
-    const laborSum = lines.reduce((a, l) => a + l.labor_cost, 0);
     const soilFactor = port.soil_factor ?? 1;
     const transportCoefficient = port.transport_coefficient ?? 1;
     directRaw = directRaw * soilFactor * transportCoefficient * (1 + port.soil_correction);
@@ -320,6 +333,9 @@ export function computeEstimate(input: {
         spoil_ground_code: port.spoil_ground_code ?? null,
         transport_distance_km: port.transport_distance_km ?? null,
         disposal_cost: disposalCost,
+        shift_labor_surcharge: shiftLabor,
+        shift_machinery_surcharge: shiftMachinery,
+        shift_rules: port.shift_rules ?? [],
       }
     : null;
 

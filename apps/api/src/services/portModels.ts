@@ -403,3 +403,81 @@ export async function resolveDredgingOptions(
     transport_distance_km: distanceKm,
   };
 }
+
+export const shiftRuleSchema = z.object({
+  rule_code: z.string().min(1).max(50),
+  rule_name: z.string().min(1).max(200),
+  shift_type: z.enum(["night", "rotation", "overtime"]),
+  time_from: z.string().max(5).optional().nullable(),
+  time_to: z.string().max(5).optional().nullable(),
+  labor_surcharge_rate: z.number().min(0).max(3).default(0),
+  machinery_surcharge_rate: z.number().min(0).max(3).default(0),
+  conditions_json: z.record(z.unknown()).optional(),
+  is_active: z.boolean().optional(),
+  note: z.string().optional().nullable(),
+});
+
+export async function listShiftRules(sql: Sql) {
+  return sql`
+    SELECT id, rule_code, rule_name, shift_type, time_from, time_to,
+           labor_surcharge_rate, machinery_surcharge_rate, conditions_json,
+           is_active, note, updated_at
+    FROM work_shift_rules
+    WHERE is_active = true
+    ORDER BY shift_type, rule_code
+  `;
+}
+
+export async function upsertShiftRule(sql: Sql, input: z.infer<typeof shiftRuleSchema>) {
+  const [row] = await sql`
+    INSERT INTO work_shift_rules
+      (rule_code, rule_name, shift_type, time_from, time_to,
+       labor_surcharge_rate, machinery_surcharge_rate, conditions_json, is_active, note)
+    VALUES
+      (${input.rule_code}, ${input.rule_name}, ${input.shift_type},
+       ${input.time_from ?? null}, ${input.time_to ?? null},
+       ${input.labor_surcharge_rate}, ${input.machinery_surcharge_rate},
+       ${JSON.stringify(input.conditions_json ?? {})}, ${input.is_active ?? true},
+       ${input.note ?? null})
+    ON CONFLICT (rule_code) DO UPDATE SET
+      rule_name = EXCLUDED.rule_name,
+      shift_type = EXCLUDED.shift_type,
+      time_from = EXCLUDED.time_from,
+      time_to = EXCLUDED.time_to,
+      labor_surcharge_rate = EXCLUDED.labor_surcharge_rate,
+      machinery_surcharge_rate = EXCLUDED.machinery_surcharge_rate,
+      conditions_json = EXCLUDED.conditions_json,
+      is_active = EXCLUDED.is_active,
+      note = EXCLUDED.note,
+      updated_at = now()
+    RETURNING id
+  `;
+  return row.id;
+}
+
+export async function resolveShiftRules(sql: Sql, codes: string[]) {
+  if (codes.length === 0) {
+    return { shift_rules: [], shift_labor_surcharge: 0, shift_machinery_surcharge: 0 };
+  }
+  const rows = await sql`
+    SELECT rule_code, rule_name, shift_type, time_from, time_to,
+           labor_surcharge_rate, machinery_surcharge_rate
+    FROM work_shift_rules
+    WHERE rule_code = ANY(${codes}) AND is_active = true
+  `;
+  const labor = rows.reduce((a, r) => a + Number(r.labor_surcharge_rate), 0);
+  const machinery = rows.reduce((a, r) => a + Number(r.machinery_surcharge_rate), 0);
+  return {
+    shift_rules: rows.map((r) => ({
+      code: r.rule_code,
+      name: r.rule_name,
+      shift_type: r.shift_type,
+      time_from: r.time_from,
+      time_to: r.time_to,
+      labor_surcharge_rate: Number(r.labor_surcharge_rate),
+      machinery_surcharge_rate: Number(r.machinery_surcharge_rate),
+    })),
+    shift_labor_surcharge: labor,
+    shift_machinery_surcharge: machinery,
+  };
+}

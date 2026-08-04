@@ -506,6 +506,7 @@ describe.skipIf(!hasDb)("integration smoke", () => {
           soil_type_code: "CLAY",
           spoil_ground_code: "SEA_DUMP_A",
           transport_distance_km: 15,
+          shift_rules: ["NIGHT_22_05", "ROTATION_2"],
         },
       }),
     });
@@ -517,6 +518,8 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(estimate.port_extras.soil_factor).toBe(1.15);
     expect(estimate.port_extras.transport_coefficient).toBe(1.08);
     expect(estimate.port_extras.disposal_cost).toBe(6720000);
+    expect(estimate.port_extras.shift_labor_surcharge).toBe(0.75);
+    expect(estimate.port_extras.shift_machinery_surcharge).toBe(0.55);
     expect(estimate.total).toBeGreaterThan(0);
     expect(estimate.materials.some((m: { resource_name: string }) => m.resource_name.includes("グラブ浚渫船"))).toBe(true);
 

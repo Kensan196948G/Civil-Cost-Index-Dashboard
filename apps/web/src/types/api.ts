@@ -656,6 +656,9 @@ export interface EstimateDetail extends EstimateSummary {
     soil_type_code?: string | null;
     spoil_ground_code?: string | null;
     transport_distance_km?: number | null;
+    shift_rules?: string[];
+    shift_labor_surcharge?: number;
+    shift_machinery_surcharge?: number;
   } | null;
   port_extras: {
     operation_rate: number;
@@ -671,6 +674,9 @@ export interface EstimateDetail extends EstimateSummary {
     spoil_ground_code: string | null;
     transport_distance_km: number | null;
     disposal_cost: number;
+    shift_labor_surcharge: number;
+    shift_machinery_surcharge: number;
+    shift_rules: string[];
   } | null;
   lines: EstimateLine[];
   materials: EstimateMaterial[];
@@ -745,6 +751,21 @@ export interface SpoilGround {
   area_name: string | null;
   distance_km: number | null;
   disposal_unit_price: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface ShiftRule {
+  id: string;
+  rule_code: string;
+  rule_name: string;
+  shift_type: "night" | "rotation" | "overtime";
+  time_from: string | null;
+  time_to: string | null;
+  labor_surcharge_rate: number;
+  machinery_surcharge_rate: number;
+  conditions_json: Record<string, unknown>;
+  is_active: boolean;
   note: string | null;
   updated_at: string;
 }

@@ -74,6 +74,8 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | POST | `/api/port-models/transport-rates` | 運搬距離係数登録・更新 |
 | GET | `/api/port-models/spoil-grounds` | 土捨場・処分場マスタ |
 | POST | `/api/port-models/spoil-grounds` | 土捨場・処分場登録・更新 |
+| GET | `/api/port-models/shift-rules` | 補正ルール（夜間/交代制/超勤）一覧 |
+| POST | `/api/port-models/shift-rules` | 補正ルール登録・更新 |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |
@@ -298,6 +300,10 @@ PoC用の簡易モデルです。作業船ごとに:
 浚渫では `soil_type_code` / `spoil_ground_code` / `transport_distance_km` を指定すると、
 土質補正係数・土捨場の処分単価・運搬距離係数をマスタから自動解決して直接工事費へ反映します。
 `port_extras` に `soil_factor` / `transport_coefficient` / `disposal_cost` が保存されます。
+
+`shift_rules`（例: `["NIGHT_22_05","ROTATION_2"]`）を指定すると、労務・機械の割増率を
+ルールマスタから合算して適用します。結果は `port_extras.shift_labor_surcharge` /
+`shift_machinery_surcharge` / `shift_rules` に保存されます。
 
 ## POST /api/projects/{id}/simulate
 

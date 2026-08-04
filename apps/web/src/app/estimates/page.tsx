@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { formatNumber, formatDateTime, downloadFile } from "@/lib/utils";
-import type { BreakdownSuggestion, EstimationBase, EstimateDetail, EstimateSummary, ProjectSummary, SeaCondition, SoilType, SpoilGround } from "@/types/api";
+import type { BreakdownSuggestion, EstimationBase, EstimateDetail, EstimateSummary, ProjectSummary, SeaCondition, ShiftRule, SoilType, SpoilGround } from "@/types/api";
 
 export default function EstimatesPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -20,6 +20,7 @@ export default function EstimatesPage() {
     soil_type_code: "",
     spoil_ground_code: "",
     transport_distance_km: "",
+    shift_rules: [] as string[],
   });
   const [seaOptions, setSeaOptions] = useState<SeaCondition[]>([]);
   const [seaArea, setSeaArea] = useState("");
@@ -27,6 +28,7 @@ export default function EstimatesPage() {
   const [seaNote, setSeaNote] = useState("");
   const [soilOptions, setSoilOptions] = useState<SoilType[]>([]);
   const [spoilOptions, setSpoilOptions] = useState<SpoilGround[]>([]);
+  const [shiftOptions, setShiftOptions] = useState<ShiftRule[]>([]);
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
   const [detail, setDetail] = useState<EstimateDetail | null>(null);
   const [suggestion, setSuggestion] = useState<BreakdownSuggestion | null>(null);
@@ -62,11 +64,12 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     if (selectedBase?.category !== "port") return;
-    void Promise.all([api.seaConditions(), api.soilTypes(), api.spoilGrounds()])
-      .then(([s, soil, spoil]) => {
+    void Promise.all([api.seaConditions(), api.soilTypes(), api.spoilGrounds(), api.shiftRules()])
+      .then(([s, soil, spoil, shift]) => {
         setSeaOptions(s.sea_conditions);
         setSoilOptions(soil.soil_types);
         setSpoilOptions(spoil.spoil_grounds);
+        setShiftOptions(shift.shift_rules);
         const first = s.sea_conditions[0];
         if (first) {
           setSeaArea(first.sea_area_code);
@@ -108,6 +111,7 @@ export default function EstimatesPage() {
                 soil_type_code: portForm.soil_type_code || null,
                 spoil_ground_code: portForm.spoil_ground_code || null,
                 transport_distance_km: portForm.transport_distance_km ? Number(portForm.transport_distance_km) : null,
+                shift_rules: portForm.shift_rules,
               },
             }
           : {}),
@@ -236,6 +240,26 @@ export default function EstimatesPage() {
               <label className={labelCls}>運搬距離（km）</label>
               <input className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm" type="number" min={0} value={portForm.transport_distance_km} onChange={(e) => setPortForm({ ...portForm, transport_distance_km: e.target.value })} />
             </div>
+            <div className="w-full">
+              <label className={labelCls}>補正ルール（夜間/交代制/超勤）</label>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {shiftOptions.map((r) => (
+                  <label key={r.id} className="flex items-center gap-1 rounded border border-blue-200 bg-white px-2 py-1 text-xs text-blue-800">
+                    <input
+                      type="checkbox"
+                      checked={portForm.shift_rules.includes(r.rule_code)}
+                      onChange={(e) => setPortForm({
+                        ...portForm,
+                        shift_rules: e.target.checked
+                          ? [...portForm.shift_rules, r.rule_code]
+                          : portForm.shift_rules.filter((c) => c !== r.rule_code),
+                      })}
+                    />
+                    {r.rule_name}（労務+{(r.labor_surcharge_rate * 100).toFixed(0)}% / 機械+{(r.machinery_surcharge_rate * 100).toFixed(0)}%）
+                  </label>
+                ))}
+              </div>
+            </div>
             <span className="text-xs text-blue-700">港湾: 船舶損料・供用係数・回航費・拘束費を自動算定</span>
             {seaNote && <div className="w-full text-xs text-blue-700">{seaNote}</div>}
           </div>
@@ -303,6 +327,8 @@ export default function EstimatesPage() {
                         <div>稼働日数: {detail.port_extras?.work_days ?? 0}日</div>
                         <div>待機・拘束: {detail.port_extras?.standby_days ?? 0}日</div>
                         <div>処分費: {money(detail.port_extras?.disposal_cost ?? 0)}円</div>
+                        <div>労務補正: +{((detail.port_extras?.shift_labor_surcharge ?? 0) * 100).toFixed(0)}%</div>
+                        <div>機械補正: +{((detail.port_extras?.shift_machinery_surcharge ?? 0) * 100).toFixed(0)}%</div>
                         <div className="col-span-2">回航・えい航費: {money(detail.port_extras?.mobilization_cost ?? 0)}円</div>
                       </div>
                     </div>

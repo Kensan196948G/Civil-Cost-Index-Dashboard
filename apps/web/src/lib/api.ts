@@ -40,6 +40,7 @@ import type {
   SimulationRequest,
   SimulationResult,
   SeaCondition,
+  ShiftRule,
   SoilType,
   SpoilGround,
   StagedIngestion,
@@ -233,6 +234,7 @@ export const api = {
       soil_type_code?: string | null;
       spoil_ground_code?: string | null;
       transport_distance_km?: number | null;
+      shift_rules?: string[];
     };
   }) =>
     request<{ estimate: EstimateDetail }>("/api/estimates/calculate", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
@@ -289,6 +291,18 @@ export const api = {
   spoilGrounds: () => request<{ spoil_grounds: SpoilGround[] }>("/api/port-models/spoil-grounds"),
   upsertSpoilGround: (input: { spoil_code: string; spoil_name: string; area_name?: string | null; distance_km?: number | null; disposal_unit_price: number; note?: string | null }) =>
     request<{ spoil_ground_id: string }>("/api/port-models/spoil-grounds", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  shiftRules: () => request<{ shift_rules: ShiftRule[] }>("/api/port-models/shift-rules"),
+  upsertShiftRule: (input: {
+    rule_code: string;
+    rule_name: string;
+    shift_type: "night" | "rotation" | "overtime";
+    time_from?: string | null;
+    time_to?: string | null;
+    labor_surcharge_rate: number;
+    machinery_surcharge_rate: number;
+    note?: string | null;
+  }) =>
+    request<{ shift_rule_id: string }>("/api/port-models/shift-rules", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   regions: () => request<{ regions: Region[] }>("/api/regions"),
   items: (category?: DataCategory) =>
     request<{ items: Item[] }>(`/api/items${category ? `?category=${category}` : ""}`),

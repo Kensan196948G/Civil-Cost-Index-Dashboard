@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { formatNumber } from "@/lib/utils";
-import type { PortEstimate, PortWorkType, SeaCondition, SoilType, SpoilGround, TransportRate, Vessel, WorkabilityResult } from "@/types/api";
+import type { PortEstimate, PortWorkType, SeaCondition, ShiftRule, SoilType, SpoilGround, TransportRate, Vessel, WorkabilityResult } from "@/types/api";
 
 export default function PortPage() {
   const [workTypes, setWorkTypes] = useState<PortWorkType[]>([]);
@@ -21,6 +21,11 @@ export default function PortPage() {
   const [masterForm, setMasterForm] = useState({
     kind: "soil", code: "", name: "", factor: "1.0", distance: "10", price: "0", note: "",
   });
+  const [shiftRules, setShiftRules] = useState<ShiftRule[]>([]);
+  const [shiftForm, setShiftForm] = useState({
+    rule_code: "", rule_name: "", shift_type: "night", time_from: "22:00", time_to: "05:00",
+    labor_surcharge_rate: "0.25", machinery_surcharge_rate: "0.25", note: "",
+  });
   const [workTypeId, setWorkTypeId] = useState("");
   const [quantity, setQuantity] = useState("10000");
   const [operationRate, setOperationRate] = useState("0.7");
@@ -35,9 +40,9 @@ export default function PortPage() {
     setLoading(true);
     setError(null);
     try {
-      const [w, v, s, soil, tr, sg] = await Promise.all([
+      const [w, v, s, soil, tr, sg, sh] = await Promise.all([
         api.portWorkTypes(), api.portVessels(), api.seaConditions(),
-        api.soilTypes(), api.transportRates(), api.spoilGrounds(),
+        api.soilTypes(), api.transportRates(), api.spoilGrounds(), api.shiftRules(),
       ]);
       setWorkTypes(w.work_types);
       setVessels(v.vessels);
@@ -45,6 +50,7 @@ export default function PortPage() {
       setSoilTypes(soil.soil_types);
       setTransportRates(tr.transport_rates);
       setSpoilGrounds(sg.spoil_grounds);
+      setShiftRules(sh.shift_rules);
       if (!workTypeId && w.work_types[0]) setWorkTypeId(w.work_types[0].id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "不明なエラー");
@@ -133,6 +139,27 @@ export default function PortPage() {
       setSoilTypes(soil.soil_types);
       setTransportRates(tr.transport_rates);
       setSpoilGrounds(sg.spoil_grounds);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "登録に失敗しました");
+    }
+  };
+
+  const saveShift = async () => {
+    setNotice(null);
+    try {
+      await api.upsertShiftRule({
+        rule_code: shiftForm.rule_code,
+        rule_name: shiftForm.rule_name,
+        shift_type: shiftForm.shift_type as "night" | "rotation" | "overtime",
+        time_from: shiftForm.time_from || null,
+        time_to: shiftForm.time_to || null,
+        labor_surcharge_rate: Number(shiftForm.labor_surcharge_rate),
+        machinery_surcharge_rate: Number(shiftForm.machinery_surcharge_rate),
+        note: shiftForm.note || null,
+      });
+      setNotice("補正ルールを登録しました。");
+      const sh = await api.shiftRules();
+      setShiftRules(sh.shift_rules);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "登録に失敗しました");
     }
@@ -307,6 +334,37 @@ export default function PortPage() {
             <div className="mt-1 text-xs text-gray-500">
               土質: コード/名称/補正係数（factor）／運搬距離: 距離をfactorに入力／土捨場: コード/名称/処分単価（distanceは距離）
             </div>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-2 text-base font-semibold">補正ルール（夜間施工・交代制・超勤）</h2>
+            <table className="w-full text-sm">
+              <thead><tr className="border-b text-left text-xs text-gray-600"><th className="py-1">ルール</th><th>種別</th><th>時間</th><th>労務割増</th><th>機械割増</th></tr></thead>
+              <tbody>
+                {shiftRules.map((r) => (
+                  <tr key={r.id} className="border-b border-gray-100">
+                    <td className="py-1">{r.rule_name} <span className="text-xs text-gray-400">（{r.rule_code}）</span></td>
+                    <td className="py-1 text-xs">{r.shift_type}</td>
+                    <td className="py-1 text-xs">{r.time_from && r.time_to ? `${r.time_from}〜${r.time_to}` : "—"}</td>
+                    <td className="py-1 text-right">+{(r.labor_surcharge_rate * 100).toFixed(0)}%</td>
+                    <td className="py-1 text-right">+{(r.machinery_surcharge_rate * 100).toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-7">
+              <input className={inputCls} placeholder="コード*" value={shiftForm.rule_code} onChange={(e) => setShiftForm({ ...shiftForm, rule_code: e.target.value })} />
+              <input className={inputCls} placeholder="名称*" value={shiftForm.rule_name} onChange={(e) => setShiftForm({ ...shiftForm, rule_name: e.target.value })} />
+              <select className={inputCls} value={shiftForm.shift_type} onChange={(e) => setShiftForm({ ...shiftForm, shift_type: e.target.value })}>
+                <option value="night">夜間</option>
+                <option value="rotation">交代制</option>
+                <option value="overtime">超勤</option>
+              </select>
+              <input className={inputCls} placeholder="開始（例: 22:00）" value={shiftForm.time_from} onChange={(e) => setShiftForm({ ...shiftForm, time_from: e.target.value })} />
+              <input className={inputCls} placeholder="終了（例: 05:00）" value={shiftForm.time_to} onChange={(e) => setShiftForm({ ...shiftForm, time_to: e.target.value })} />
+              <input className={inputCls} placeholder="労務割増（0.25）" value={shiftForm.labor_surcharge_rate} onChange={(e) => setShiftForm({ ...shiftForm, labor_surcharge_rate: e.target.value })} />
+              <input className={inputCls} placeholder="機械割増（0.25）" value={shiftForm.machinery_surcharge_rate} onChange={(e) => setShiftForm({ ...shiftForm, machinery_surcharge_rate: e.target.value })} />
+            </div>
+            <button onClick={() => void saveShift()} className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">登録・更新</button>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

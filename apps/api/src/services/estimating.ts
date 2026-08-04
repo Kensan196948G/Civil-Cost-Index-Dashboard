@@ -11,7 +11,7 @@ import {
 } from "../lib/estimating";
 import { generateAiText } from "../lib/ai";
 import type { CsvRow } from "../lib/csv";
-import { resolveDredgingOptions } from "./portModels";
+import { resolveDredgingOptions, resolveShiftRules } from "./portModels";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB driver boundary
 type DbRow = Record<string, any>;
@@ -647,6 +647,7 @@ export async function calculateEstimate(
       spoil_ground_code: portOptions?.spoil_ground_code ?? null,
       transport_distance_km: portOptions?.transport_distance_km ?? null,
     });
+    const shift = await resolveShiftRules(sql, portOptions?.shift_rules ?? []);
     port = {
       operation_rate: portOptions?.operation_rate ?? 0.7,
       mobilization_days: portOptions?.mobilization_days ?? null,
@@ -658,6 +659,9 @@ export async function calculateEstimate(
       spoil_ground_code: dredge.spoil_ground_code,
       transport_coefficient: dredge.transport_coefficient,
       transport_distance_km: dredge.transport_distance_km,
+      shift_rules: shift.shift_rules.map((r) => r.code),
+      shift_labor_surcharge: shift.shift_labor_surcharge,
+      shift_machinery_surcharge: shift.shift_machinery_surcharge,
     };
   }
   const result = computeEstimate({

@@ -97,11 +97,14 @@ import {
   upsertTransportRate,
   listSpoilGrounds,
   upsertSpoilGround,
+  listShiftRules,
+  upsertShiftRule,
   portEstimateSchema,
   seaConditionSchema,
   soilTypeSchema,
   transportRateSchema,
   spoilGroundSchema,
+  shiftRuleSchema,
 } from "./services/portModels";
 import {
   listEstimationBases,
@@ -1195,6 +1198,22 @@ app.post("/api/port-models/spoil-grounds", async (c) => {
   return ok(c, { spoil_ground_id: id });
 });
 
+app.get("/api/port-models/shift-rules", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { shift_rules: await listShiftRules(sql) });
+});
+
+app.post("/api/port-models/shift-rules", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = shiftRuleSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  const id = await upsertShiftRule(sql, parsed.data);
+  await recordAudit(sql, identity, "shift_rule.upsert", "shift_rule", String(id));
+  return ok(c, { shift_rule_id: id });
+});
+
 // ---- 積算エンジン（Phase 4） ----
 
 const ESTIMATE_WRITE_ROLES = ["data_ingester", "data_approver", "estimator", "estimating_manager", "system_admin"];
@@ -1420,6 +1439,7 @@ app.post("/api/estimates/calculate", async (c) => {
           soil_type_code: z.string().optional().nullable(),
           spoil_ground_code: z.string().optional().nullable(),
           transport_distance_km: z.number().min(0).optional().nullable(),
+          shift_rules: z.array(z.string()).optional(),
         })
         .optional(),
     })

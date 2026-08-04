@@ -8,6 +8,15 @@
 - `/api/ai/status` に `providers`（設定状況・モデル一覧）と `provider_label` を追加
 - テスト106件 PASS / Workerビルド成功
 
+## Unreleased（2026-08-05: シークレット同期スクリプト）
+
+- `scripts/sync-secrets.mjs` を追加
+  - `apps/api/.secrets.env`（または `.dev.vars`）にキーを置くだけで反映
+  - Cloudflare: `wrangler secret put` → `wrangler deploy` → `/api/ai/status` 確認まで自動化
+  - 本機LAN: `/etc/cci/cci.env` へ反映 → `systemctl restart cci` → 確認まで自動化
+  - `--dry-run` で事前確認可能
+- npm scripts: `secrets:cloudflare` / `secrets:local` / `secrets:sync`
+
 ## Unreleased（2026-08-05: 残タスク対応・ルートReact化）
 
 前日の対応で残った項目を実装。

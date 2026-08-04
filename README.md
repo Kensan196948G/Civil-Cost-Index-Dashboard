@@ -127,6 +127,30 @@ systemd ユニット `cci.service` を登録済み（起動時自動起動）。
 プロバイダー優先順位（未指定時）: Anthropic → DeepSeek → Perplexity → Workers AI → ルール生成。
 `/api/ai/status` で設定状況と選択中プロバイダーを確認できます。
 
+### 🔑 APIキーの設定（ファイルを置くだけ）
+
+シークレットは `apps/api/.secrets.env` に記入して保存するだけで、
+Cloudflare Worker と本機LANの両方へ反映できます（Git管理外）。
+
+```bash
+# 1. 雛形をコピーしてキーを記入
+cp apps/api/.secrets.env.example apps/api/.secrets.env
+# 例: DEEPSEEK_API_KEY=sk-xxxx / PERPLEXITY_API_KEY=pplx-xxxx
+
+# 2. Cloudflare Worker へ反映＋デプロイ＋/api/ai/status確認
+cd apps/api && npm run secrets:cloudflare
+
+# 3. 本機LAN（/etc/cci/cci.env）へ反映＋再起動（要sudo）
+sudo npm run secrets:local
+
+# 両方まとめて / 事前確認
+npm run secrets:sync
+npm run secrets:cloudflare -- --dry-run
+```
+
+`.dev.vars` に記入している場合はそちらも自動で読み取ります（ビルド用変数は除外）。
+Cloudflare は `wrangler secret put` → `wrangler deploy` → `/api/ai/status` の確認まで自動実行します。
+
 Phase 2〜4（データ品質拡張・自然言語検索/RAG・予測/案件影響）のロードマップは [AI拡張ロードマップ](docs/ai-roadmap.md) を参照してください。
 
 ## 🗄️ データソース

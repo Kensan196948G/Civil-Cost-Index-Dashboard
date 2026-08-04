@@ -1032,3 +1032,89 @@ docker compose up -d
 - ダッシュボード概要をNotionページへ自動出力する。
 - 月次市況レポートをNotionデータベースへ保存する。
 - プロジェクト別の概算検討メモと紐づける。
+
+---
+
+# 16. AI機能詳細設計（AI拡張 Phase 1）
+
+## 16.1 アーキテクチャ
+
+既存構成（Next.js + Hono + Neon）を維持し、AIオーケストレーション層を追加する。
+
+```mermaid
+flowchart TD
+    UI["Next.js ダッシュボード"] --> API["Hono API"]
+    API --> RULE["統計・ルール判定 (aiFacts / aiQuality / alerts)"]
+    API --> AI["AIオーケストレーター (lib/ai.ts)"]
+    RULE --> DB["Neon PostgreSQL"]
+    AI --> MODEL["Anthropic API / Cloudflare Workers AI"]
+    AI --> AUDIT["ai_audit_logs（根拠・監査ログ）"]
+```
+
+- 事実データ（最新月・変動率・連続月数・更新遅延など）は `services/aiFacts.ts` がSQL＋統計処理で確定する。
+- AIはプロンプトに埋め込まれた事実の「説明」のみを行い、数値の計算・推測を禁止するシステムプロンプトを使用する。
+- プロバイダー抽象化は `lib/ai.ts`。優先順位: `AI_PROVIDER` 強制指定 → `ANTHROPIC_API_KEY`（Anthropic）→ Workers AI バインディング → なし（ルール生成）。
+
+## 16.2 環境変数・バインディング
+
+| 名称 | 種別 | 内容 |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | Secret | 設定時は Anthropic API を優先使用（既定モデル: claude-opus-5） |
+| `AI_MODEL` | Var | モデルIDの上書き |
+| `AI_PROVIDER` | Var | `anthropic` / `workers-ai` / `none` の強制指定 |
+| `AI` | Binding | Cloudflare Workers AI（wrangler.jsonc の `"ai"`。既定モデル: @cf/meta/llama-3.3-70b-instruct-fp8-fast） |
+
+## 16.3 APIエンドポイント
+
+| メソッド | パス | 内容 | 認証 |
+| --- | --- | --- | --- |
+| GET | `/api/ai/status` | プロバイダー・モデル・有効機能 | 通常 |
+| GET | `/api/ai/templates` | 分析テンプレート一覧 | 通常 |
+| POST | `/api/ai/summary` | AI市況サマリー（`audience`: default/executive/estimator/client、`region_id`） | 通常 |
+| POST | `/api/ai/alerts/explain` | アラート説明（`threshold_mom`/`threshold_yoy`/`limit`） | 通常 |
+| POST | `/api/ai/report` | Markdownレポート生成（`report_type`: monthly/executive/estimator/client/quality） | 通常 |
+| GET | `/api/ai/quality` | データ品質チェック（更新遅延・欠損・固定値・外れ値・表記揺れ・品質スコア） | 通常 |
+| POST | `/api/ai/feedback` | 回答評価（`audit_id`/`rating`/`comment`） | 通常 |
+| GET | `/api/ai/audit` | AI利用監査ログ一覧 | 管理者キー |
+
+全レスポンスに `generated_by`（ai/rule）・出典・基準年月・免責文を含める。
+
+## 16.4 データベース
+
+`migrations/004_ai_features.sql` で `ai_audit_logs` テーブルを追加する。
+
+| カラム | 内容 |
+| --- | --- |
+| feature | summary / alert_explain / report など |
+| question / response_text | マスキング済みの入力・出力 |
+| provider / model / prompt_version | 再現性のための生成条件 |
+| data_scope / sources | 使用データ範囲・出典（JSONB） |
+| status / error_message | success / fallback / error |
+| duration_ms / input_tokens / output_tokens | 性能・費用管理 |
+| rating / feedback_comment | 利用者フィードバック |
+
+監査ログ書き込みは fail-safe とし、失敗しても機能本体は継続する。
+
+## 16.5 データ品質チェック（ルールベース）
+
+| 種別 | 判定 |
+| --- | --- |
+| stale | 系列の最新月が全体最新月より3か月以上古い（6か月以上でhigh） |
+| gap | 系列期間内の欠損月 |
+| constant | 直近6か月以上同値 |
+| outlier | 直近前月比のZスコア絶対値が3以上（履歴6点以上で判定） |
+| name_variant | 正規化（全半角・空白・記号・同義語）後に一致する品目名の組 |
+
+品質スコア = 最新性40% + 完全性30% + 一貫性30%。検出結果は「確認候補」であり自動確定しない。
+
+## 16.6 画面
+
+| 画面 | パス | 内容 |
+| --- | --- | --- |
+| AI市況ナビ | `/ai` | AI要約（対象者切替）・分析テンプレート・アラート説明・レポート生成（Markdown保存） |
+| AI管理 | `/admin/ai` | データ品質チェック・品質スコア・AI利用監査ログ |
+| トップ | `/` | 「AIによる今月の要点」カード＋「詳しく分析」ボタン |
+
+## 16.7 テスト
+
+`apps/api/tests/ai.test.ts` にて、プロバイダー選択・事実算出（変動率・連続月数・更新遅延）・フォールバック文生成・プロンプト構築・品質チェック（Zスコア・表記揺れ・欠損・固定値）・品質スコアの単体テストを実施する。

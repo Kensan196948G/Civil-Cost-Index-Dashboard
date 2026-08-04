@@ -32,6 +32,9 @@ const env = {
   BASIC_AUTH_USERNAME: process.env.BASIC_AUTH_USERNAME ?? "",
   BASIC_AUTH_PASSWORD: process.env.BASIC_AUTH_PASSWORD ?? "",
   FETCH_ALLOWED_HOSTS: process.env.FETCH_ALLOWED_HOSTS ?? "",
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
+  AI_MODEL: process.env.AI_MODEL ?? "",
+  AI_PROVIDER: process.env.AI_PROVIDER ?? "",
 };
 
 const port = Number(process.env.API_PORT ?? process.env.PORT ?? "8100");

@@ -1,3 +1,8 @@
+/** Cloudflare Workers AI バインディング（wrangler.jsonc の "ai" で有効化） */
+export type WorkersAiBinding = {
+  run(model: string, input: Record<string, unknown>): Promise<unknown>;
+};
+
 export type Env = {
   DATABASE_URL: string;
   ADMIN_API_KEY: string;
@@ -7,6 +12,14 @@ export type Env = {
   BASIC_AUTH_PASSWORD?: string;
   /** 任意: URL取込で許可するホスト（カンマ区切り）。未設定なら全パブリックホスト許可。 */
   FETCH_ALLOWED_HOSTS?: string;
+  /** 任意: Anthropic APIキー。設定時はAnthropicを優先使用。 */
+  ANTHROPIC_API_KEY?: string;
+  /** 任意: 使用モデルの上書き（例: claude-opus-5 / @cf/meta/llama-3.3-70b-instruct-fp8-fast） */
+  AI_MODEL?: string;
+  /** 任意: AIプロバイダーの強制指定 anthropic / workers-ai / none */
+  AI_PROVIDER?: string;
+  /** Workers AI バインディング（Workersデプロイ時のみ） */
+  AI?: WorkersAiBinding;
 };
 
 export type Region = {

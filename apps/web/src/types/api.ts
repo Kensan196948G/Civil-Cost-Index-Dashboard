@@ -166,3 +166,141 @@ export interface TimeseriesParams {
   base_period?: string;
   chart_type?: string;
 }
+
+// ---- AI機能（Phase 1: AI市況ナビ） ----
+
+export type AiAudience = "default" | "executive" | "estimator" | "client";
+
+export interface AiStatus {
+  ai_enabled: boolean;
+  provider: string;
+  model: string | null;
+  features: string[];
+}
+
+export interface AiSeriesFact {
+  item_name: string;
+  region_name: string;
+  category: string;
+  unit: string | null;
+  latest_period: string;
+  latest_value: number;
+  mom_rate: number | null;
+  yoy_rate: number | null;
+  streak: number;
+  source_name: string | null;
+}
+
+export interface AiSourceRef {
+  source_name: string;
+  source_url: string | null;
+  last_fetched_at: string | null;
+}
+
+export interface AiSummaryResponse {
+  summary: string;
+  generated_by: "ai" | "rule";
+  provider: string;
+  model: string | null;
+  audience: AiAudience;
+  audience_label: string;
+  base_period: string | null;
+  warnings: string[];
+  sources: AiSourceRef[];
+  facts: {
+    top_yoy_up: AiSeriesFact[];
+    top_yoy_down: AiSeriesFact[];
+    streak_up: AiSeriesFact[];
+    streak_down: AiSeriesFact[];
+    stale_series: Array<{ item_name: string; region_name: string; latest_period: string; months_behind: number }>;
+  };
+  audit_id: string | null;
+  disclaimer: string;
+}
+
+export interface AiAlertExplained {
+  item_name: string;
+  region_name: string;
+  period: string;
+  mom_rate: number | null;
+  yoy_rate: number | null;
+  reason: string;
+  priority: string;
+  streak: number;
+  explanation: string;
+}
+
+export interface AiAlertsResponse {
+  generated_by: "ai" | "rule";
+  provider: string;
+  model: string | null;
+  audit_id: string | null;
+  alerts: AiAlertExplained[];
+  disclaimer: string;
+}
+
+export interface AiReportResponse {
+  report_type: string;
+  report_type_label: string;
+  markdown: string;
+  generated_by: "ai" | "rule";
+  provider: string;
+  model: string | null;
+  generated_at: string;
+  base_period: string | null;
+  audit_id: string | null;
+}
+
+export interface AiQualityIssue {
+  type: "stale" | "gap" | "constant" | "outlier" | "name_variant";
+  severity: "high" | "medium" | "low";
+  item_name: string;
+  region_name: string | null;
+  detail: string;
+}
+
+export interface AiQualityScore {
+  source_name: string;
+  score: number;
+  breakdown: { completeness: number; freshness: number; consistency: number };
+  note: string;
+}
+
+export interface AiQualityResponse {
+  checked_series: number;
+  latest_period: string | null;
+  issues: AiQualityIssue[];
+  quality_scores: AiQualityScore[];
+  note: string;
+}
+
+export interface AiTemplate {
+  id: string;
+  label: string;
+  description: string;
+  action:
+    | { type: "summary"; audience?: string }
+    | { type: "alerts" }
+    | { type: "report"; report_type: string }
+    | { type: "quality" };
+}
+
+export interface AiAuditLog {
+  id: string;
+  feature: string;
+  question: string | null;
+  provider: string;
+  model: string | null;
+  prompt_version: string | null;
+  data_scope: unknown;
+  response_preview: string;
+  sources: unknown;
+  status: string;
+  error_message: string | null;
+  duration_ms: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  rating: string | null;
+  feedback_comment: string | null;
+  created_at: string;
+}

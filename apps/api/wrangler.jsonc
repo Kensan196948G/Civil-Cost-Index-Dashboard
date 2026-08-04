@@ -3,6 +3,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-07-31",
   "compatibility_flags": ["nodejs_compat"],
+  // Workers AI バインディング（AI市況サマリー等のフォールバック用。ANTHROPIC_API_KEY 設定時はそちらを優先）
+  "ai": {
+    "binding": "AI"
+  },
   "observability": {
     "enabled": true,
     "logs": {

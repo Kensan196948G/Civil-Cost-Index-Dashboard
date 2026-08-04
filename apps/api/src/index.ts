@@ -21,6 +21,13 @@ import { fetchFromUrl } from "./services/fetchUrl";
 import { handleUpload } from "./services/uploads";
 import { buildCsvExport } from "./services/exportCsv";
 import { parsePeriod } from "./lib/stats";
+import { getAiProviderInfo } from "./lib/ai";
+import { buildMarketSummary, type Audience } from "./services/aiSummary";
+import { explainAlerts } from "./services/aiAlerts";
+import { generateReport, REPORT_TYPE_LABELS, type ReportType } from "./services/aiReport";
+import { runQualityChecks } from "./services/aiQuality";
+import { AI_TEMPLATES } from "./services/aiTemplates";
+import { listAiAudit, submitAiFeedback } from "./services/aiAudit";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
 
@@ -374,6 +381,143 @@ app.get("/api/export/csv", async (c) => {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="cci-export-${new Date().toISOString().slice(0, 10)}.csv"`,
     });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+// ---- AI機能（Phase 1: AI市況ナビ） ----
+// 原則: 集計・計算・アラート判定はコード側、AIは説明・要約のみ。
+// AI未設定でも全エンドポイントがルール生成テキストで動作する。
+
+app.get("/api/ai/status", (c) => {
+  const info = getAiProviderInfo(c.env);
+  return ok(c, {
+    ai_enabled: info.provider !== "none",
+    provider: info.provider,
+    model: info.model,
+    features: ["summary", "alert_explain", "report", "quality", "templates", "audit"],
+  });
+});
+
+app.get("/api/ai/templates", (c) => ok(c, { templates: AI_TEMPLATES }));
+
+const AUDIENCES = ["default", "executive", "estimator", "client"];
+
+app.post("/api/ai/summary", async (c) => {
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    // ボディ省略可（デフォルト条件で生成）
+  }
+  const audience = typeof body.audience === "string" ? body.audience : "default";
+  if (!AUDIENCES.includes(audience)) {
+    return fail(c, "VALIDATION_ERROR", `audience は ${AUDIENCES.join("/")} のいずれかを指定してください。`, 400);
+  }
+  const regionId = typeof body.region_id === "string" && body.region_id ? body.region_id : undefined;
+  try {
+    const sql = getSql(c.env);
+    const result = await buildMarketSummary(sql, c.env, { regionId, audience: audience as Audience });
+    return ok(c, result);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/ai/alerts/explain", async (c) => {
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    // ボディ省略可
+  }
+  const thresholdMom = Number(body.threshold_mom ?? 5);
+  const thresholdYoy = Number(body.threshold_yoy ?? 10);
+  const limit = Number(body.limit ?? 10);
+  if (![thresholdMom, thresholdYoy, limit].every(Number.isFinite) || limit < 1 || limit > 50) {
+    return fail(c, "VALIDATION_ERROR", "threshold/limit の値が不正です。", 400);
+  }
+  try {
+    const sql = getSql(c.env);
+    const result = await explainAlerts(sql, c.env, { thresholdMom, thresholdYoy, limit: Math.floor(limit) });
+    return ok(c, result);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/ai/report", async (c) => {
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await c.req.json()) as Record<string, unknown>;
+  } catch {
+    return fail(c, "VALIDATION_ERROR", "JSONボディが必要です。", 400);
+  }
+  const reportType = typeof body.report_type === "string" ? body.report_type : "";
+  if (!(reportType in REPORT_TYPE_LABELS)) {
+    return fail(c, "VALIDATION_ERROR", `report_type は ${Object.keys(REPORT_TYPE_LABELS).join("/")} のいずれかを指定してください。`, 400);
+  }
+  const regionId = typeof body.region_id === "string" && body.region_id ? body.region_id : undefined;
+  try {
+    const sql = getSql(c.env);
+    const result = await generateReport(sql, c.env, { reportType: reportType as ReportType, regionId });
+    return ok(c, result);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/ai/quality", async (c) => {
+  try {
+    const sql = getSql(c.env);
+    return ok(c, await runQualityChecks(sql));
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/ai/feedback", async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return fail(c, "VALIDATION_ERROR", "JSONボディが必要です。", 400);
+  }
+  const parsed = z
+    .object({
+      audit_id: z.string().uuid(),
+      rating: z.string().min(1),
+      comment: z.string().max(2000).optional().nullable(),
+    })
+    .safeParse(body);
+  if (!parsed.success) {
+    return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
+  }
+  try {
+    const sql = getSql(c.env);
+    const updated = await submitAiFeedback(sql, {
+      auditId: parsed.data.audit_id,
+      rating: parsed.data.rating,
+      comment: parsed.data.comment ?? null,
+    });
+    if (!updated) return fail(c, "NOT_FOUND", "対象の監査ログが見つかりません。", 404);
+    return ok(c, { updated: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/ai/audit", async (c) => {
+  if (!requireAdmin(c)) return fail(c, "UNAUTHORIZED", "管理者キーが必要です。", 401);
+  const limit = Number(c.req.query("limit") ?? 50);
+  if (!Number.isFinite(limit) || limit < 1 || limit > 200) {
+    return fail(c, "VALIDATION_ERROR", "limit は 1〜200 で指定してください。", 400);
+  }
+  try {
+    const sql = getSql(c.env);
+    const logs = await listAiAudit(sql, { feature: c.req.query("feature") ?? undefined, limit: Math.floor(limit) });
+    return ok(c, { logs });
   } catch (e) {
     return handleError(c, e);
   }

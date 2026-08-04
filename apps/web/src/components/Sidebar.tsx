@@ -11,9 +11,13 @@ const MENU = [
     { href: "/table", label: "データテーブル", icon: "☰" },
     { href: "/export", label: "レポート出力", icon: "⤓" },
   ]},
+  { group: "AI分析", items: [
+    { href: "/ai", label: "AI市況ナビ", icon: "✦" },
+  ]},
   { group: "データ管理", items: [
     { href: "/admin/data-sources", label: "データソース管理", icon: "◫" },
     { href: "/admin/fetch-jobs", label: "取込履歴", icon: "↻" },
+    { href: "/admin/ai", label: "AI管理", icon: "◈" },
   ]},
   { group: "システム", items: [
     { href: "/settings", label: "ユーザー設定", icon: "⚙" },

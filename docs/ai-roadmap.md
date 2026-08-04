@@ -88,4 +88,14 @@
 - 発注者説明文案
 - 予測シナリオ（参考レンジ・データ充足度）
 
+AIプロバイダー方針（2026-08-05 決定）:
+- Anthropic / Perplexity / DeepSeek / Workers AI に対応
+- 大量処理・コスト重視タスクは DeepSeek を既定推奨（`DEEPSEEK_API_KEY`・OpenAI互換API）
+- 高精度な文書生成は Anthropic、最新情報調査は Perplexity
+- 案件名・未公開価格・協力会社見積を含むプロンプトはマスキングまたは送信禁止を設定可能
+
+数量拾い出しのデータ整備は「数量計算書Excelの取込・AIチェック」を最優先とし、
+図面OCRは合成サンプル・公表図面・自社過去案件で精度評価したうえで候補提示まで進める
+（詳細は仕様書 §5.1）。
+
 詳細仕様は [docs/estimating-system-spec.md](estimating-system-spec.md) を参照。

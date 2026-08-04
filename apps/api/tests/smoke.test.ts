@@ -653,4 +653,67 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     await get(`/api/estimates/${estimateId}`, { method: "DELETE", headers: admin });
     await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
   });
+
+  it("quotations: create/compare/adopt/export/delete", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const itemRes = await get("/api/items?category=MATERIAL_PRICE");
+    const item = itemRes.body.data.items.find((i: { item_code: string }) => i.item_code === "STEEL_H");
+    const proj = await get("/api/projects", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ name: "スモーク 見積比較", work_type: "土工" }),
+    });
+    const projectId = proj.body.data.project.id;
+
+    const qa = await get("/api/quotations", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, supplier_name: "A社", quote_date: "2026-07-01", valid_until: "2026-07-15" }),
+    });
+    expect(qa.status).toBe(201);
+    const qaId = qa.body.data.quotation_id;
+    const qb = await get("/api/quotations", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, supplier_name: "B社", quote_date: "2026-08-01", valid_until: "2026-09-01" }),
+    });
+    const qbId = qb.body.data.quotation_id;
+    await get(`/api/quotations/${qaId}/items`, {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ item_id: item.id, item_name: item.item_name, unit: "円/t", unit_price: 100000 }),
+    });
+    const bItem = await get(`/api/quotations/${qbId}/items`, {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ item_id: item.id, item_name: item.item_name, unit: "円/t", unit_price: 130000 }),
+    });
+    expect(bItem.status).toBe(201);
+    const bItemId = bItem.body.data.item_id;
+
+    const detailA = await get(`/api/quotations/${qaId}`);
+    expect(detailA.status).toBe(200);
+    expect(detailA.body.data.quotation.expiry.expired).toBe(true);
+    const detailB = await get(`/api/quotations/${qbId}`);
+    const bRow = detailB.body.data.quotation.comparison.find((c: { supplier_name: string }) => c.supplier_name === "B社");
+    expect(bRow.deviation_rate).toBeGreaterThan(0);
+
+    const adopt = await get(`/api/quotations/${qbId}/items/${bItemId}`, {
+      method: "PATCH",
+      headers: admin,
+      body: JSON.stringify({ is_adopted: true, adoption_reason: "納期・実績を総合評価" }),
+    });
+    expect(adopt.status).toBe(200);
+    const after = await get(`/api/quotations/${qbId}`);
+    expect(after.body.data.quotation.items[0].is_adopted).toBe(true);
+
+    const xlsx = await app!.fetch(new Request(`http://localhost/api/quotations/${qbId}/export`), env);
+    expect(xlsx.status).toBe(200);
+    const wb = XLSX.read(await xlsx.arrayBuffer(), { type: "buffer" });
+    expect(wb.SheetNames).toEqual(expect.arrayContaining(["見積比較", "明細"]));
+
+    await get(`/api/quotations/${qaId}`, { method: "DELETE", headers: admin });
+    await get(`/api/quotations/${qbId}`, { method: "DELETE", headers: admin });
+    await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+  }, 15000);
 });

@@ -806,6 +806,56 @@ export interface ChangeOrderDetail extends ChangeOrderSummary {
   summary: { increase: number; decrease: number; net: number };
 }
 
+export interface QuotationSummary {
+  id: string;
+  project_id: string;
+  project_name: string;
+  supplier_name: string;
+  quote_date: string;
+  valid_until: string | null;
+  status: string;
+  tax_inclusive: boolean;
+  freight_included: boolean;
+  conditions_json: Record<string, unknown>;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+  item_count: number;
+  expiry: { expired: boolean; expiring_soon: boolean; days_left: number | null };
+}
+
+export interface QuotationComparisonRow {
+  key: string;
+  item_name: string;
+  standard_name: string | null;
+  unit: string | null;
+  supplier_name: string;
+  unit_price: number;
+  average: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  deviation_rate: number | null;
+  previous_price: number | null;
+  previous_change_rate: number | null;
+  warnings: string[];
+}
+
+export interface QuotationItem extends QuotationComparisonRow {
+  id: string;
+  quotation_id: string;
+  item_id: string | null;
+  tree_id: string | null;
+  is_adopted: boolean;
+  adoption_reason: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface QuotationDetail extends QuotationSummary {
+  items: QuotationItem[];
+  comparison: QuotationComparisonRow[];
+}
+
 export interface FetchJob {
   id: string;
   data_source_id: string;

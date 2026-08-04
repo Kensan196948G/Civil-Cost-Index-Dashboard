@@ -38,6 +38,8 @@ import type {
   Project,
   ProjectItem,
   ProjectSummary,
+  QuotationDetail,
+  QuotationSummary,
   Region,
   SimulationRequest,
   SimulationResult,
@@ -271,6 +273,39 @@ export const api = {
   deleteChangeOrderLine: (changeOrderId: string, lineId: string) =>
     request<{ deleted: boolean }>(`/api/change-orders/${changeOrderId}/lines/${lineId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
   changeOrderExportUrl: (id: string) => `/api/change-orders/${id}/export`,
+  quotations: (projectId?: string) =>
+    request<{ quotations: QuotationSummary[] }>(`/api/quotations${projectId ? `?project_id=${projectId}` : ""}`),
+  createQuotation: (input: {
+    project_id: string;
+    supplier_name: string;
+    quote_date?: string | null;
+    valid_until?: string | null;
+    status?: string;
+    tax_inclusive?: boolean;
+    freight_included?: boolean;
+    note?: string | null;
+  }) =>
+    request<{ quotation_id: string }>("/api/quotations", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  quotation: (id: string) => request<{ quotation: QuotationDetail }>(`/api/quotations/${id}`),
+  patchQuotation: (id: string, input: Partial<{ supplier_name: string; quote_date: string | null; valid_until: string | null; status: string; tax_inclusive: boolean; freight_included: boolean; note: string | null }>) =>
+    request<{ quotation_id: string }>(`/api/quotations/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteQuotation: (id: string) =>
+    request<{ deleted: boolean }>(`/api/quotations/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  addQuotationItem: (id: string, input: {
+    item_id?: string | null;
+    tree_id?: string | null;
+    item_name: string;
+    standard_name?: string | null;
+    unit?: string | null;
+    unit_price: number;
+    note?: string | null;
+  }) =>
+    request<{ item_id: string }>(`/api/quotations/${id}/items`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  patchQuotationItem: (quotationId: string, itemId: string, input: { is_adopted?: boolean; adoption_reason?: string | null; unit_price?: number; note?: string | null }) =>
+    request<{ item_id: string }>(`/api/quotations/${quotationId}/items/${itemId}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteQuotationItem: (quotationId: string, itemId: string) =>
+    request<{ deleted: boolean }>(`/api/quotations/${quotationId}/items/${itemId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  quotationExportUrl: (id: string) => `/api/quotations/${id}/export`,
   seaConditions: (seaAreaCode?: string) =>
     request<{ sea_conditions: SeaCondition[] }>(`/api/port-models/sea-conditions${seaAreaCode ? `?sea_area_code=${seaAreaCode}` : ""}`),
   upsertSeaCondition: (input: {

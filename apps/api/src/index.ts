@@ -147,6 +147,21 @@ import {
   changeOrderSchema,
   changeLineSchema,
 } from "./services/changeOrders";
+import {
+  createQuotation,
+  listQuotations,
+  getQuotation,
+  updateQuotation,
+  addQuotationItem,
+  updateQuotationItem,
+  deleteQuotationItem,
+  deleteQuotation,
+  buildQuotationXlsx,
+  quotationSchema,
+  quotationPatchSchema,
+  quotationItemSchema,
+  quotationItemPatchSchema,
+} from "./services/quotations";
 import { runScheduledJobs } from "./lib/scheduler";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
@@ -1610,6 +1625,122 @@ app.get("/api/change-orders/:id/export", async (c) => {
     return c.body(buffer, 200, {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="cci-change-order-${c.req.param("id").slice(0, 8)}.xlsx"`,
+    });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+// ---- 見積比較・査定支援 ----
+
+app.get("/api/quotations", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { quotations: await listQuotations(sql, c.req.query("project_id") ?? undefined) });
+});
+
+app.post("/api/quotations", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = quotationSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await createQuotation(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "quotation.create", "quotation", String(id));
+    return ok(c, { quotation_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/quotations/:id", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const quotation = await getQuotation(sql, c.req.param("id"));
+  if (!quotation) return fail(c, "NOT_FOUND", "見積が見つかりません。", 404);
+  return ok(c, { quotation });
+});
+
+app.patch("/api/quotations/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = quotationPatchSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await updateQuotation(sql, c.req.param("id"), parsed.data);
+    if (!id) return fail(c, "NOT_FOUND", "見積が見つかりません。", 404);
+    await recordAudit(sql, identity, "quotation.update", "quotation", String(id));
+    return ok(c, { quotation_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.delete("/api/quotations/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await deleteQuotation(sql, c.req.param("id"));
+    if (!id) return fail(c, "NOT_FOUND", "見積が見つかりません。", 404);
+    await recordAudit(sql, identity, "quotation.delete", "quotation", String(id));
+    return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/quotations/:id/items", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = quotationItemSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await addQuotationItem(sql, c.req.param("id"), parsed.data);
+    await recordAudit(sql, identity, "quotation_item.create", "quotation_item", String(id));
+    return ok(c, { item_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.patch("/api/quotations/:id/items/:itemId", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = quotationItemPatchSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await updateQuotationItem(sql, c.req.param("itemId"), parsed.data);
+    if (!id) return fail(c, "NOT_FOUND", "見積明細が見つかりません。", 404);
+    await recordAudit(sql, identity, "quotation_item.update", "quotation_item", String(id), { adoption_reason: parsed.data.adoption_reason ?? null });
+    return ok(c, { item_id: id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.delete("/api/quotations/:id/items/:itemId", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await deleteQuotationItem(sql, c.req.param("itemId"));
+    if (!id) return fail(c, "NOT_FOUND", "見積明細が見つかりません。", 404);
+    await recordAudit(sql, identity, "quotation_item.delete", "quotation_item", String(id));
+    return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/quotations/:id/export", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  try {
+    const quotation = await getQuotation(sql, c.req.param("id"));
+    if (!quotation) return fail(c, "NOT_FOUND", "見積が見つかりません。", 404);
+    const buffer = await buildQuotationXlsx(sql, c.req.param("id"));
+    return c.body(buffer, 200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="cci-quotation-${c.req.param("id").slice(0, 8)}.xlsx"`,
     });
   } catch (e) {
     return handleError(c, e);

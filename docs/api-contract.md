@@ -84,6 +84,15 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | DELETE | `/api/change-orders/{id}/lines/{lineId}` | 変更明細削除 |
 | GET | `/api/change-orders/{id}/export` | 差額表Excel（差額集計／変更明細） |
 | GET | `/api/estimates/{id}/export.pdf` | 積算書PDF（総括表・内訳・単価表・港湾補足・日本語フォント） |
+| GET | `/api/quotations` | 協力会社見積一覧（`project_id` 任意・有効期限ステータス付き） |
+| POST | `/api/quotations` | 見積登録（税込/運賃込・正規化条件） |
+| GET | `/api/quotations/{id}` | 見積詳細（案件全体の業者間比較・平均比/前回比・警告・採用状態） |
+| PATCH | `/api/quotations/{id}` | 見積更新（有効期限・状態など） |
+| DELETE | `/api/quotations/{id}` | 見積削除 |
+| POST | `/api/quotations/{id}/items` | 見積明細追加 |
+| PATCH | `/api/quotations/{id}/items/{itemId}` | 見積明細更新（採用・採用理由・単価） |
+| DELETE | `/api/quotations/{id}/items/{itemId}` | 見積明細削除 |
+| GET | `/api/quotations/{id}/export` | 見積比較Excel（見積比較／明細） |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

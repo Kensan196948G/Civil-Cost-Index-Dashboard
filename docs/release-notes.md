@@ -1,5 +1,13 @@
 # リリースノート
 
+## Unreleased（2026-08-05: 見積比較・査定支援）
+
+- migration `014_quotations.sql`: `quotations` / `quotation_items`（税込/運賃込・正規化条件・採用/採用理由）
+- 見積比較ライブラリ（`lib/quotations.ts`）: 業者間の平均比・最小/最大・±20%警告・前回比（±10%）警告・有効期限判定
+- API: 見積CRUD・明細CRUD（採用・採用理由）・見積比較Excel
+- Web: `/admin/quotations`（見積一覧・業者間比較・採用・有効期限バッジ・Excel出力）
+- テスト127件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: 港湾用積算書PDF・設計変更/変更契約差額）
 
 - migration `013_change_orders.sql`: `change_orders` / `change_order_lines`（変更前後数量・単価・基準年度を保持）

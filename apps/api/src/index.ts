@@ -113,6 +113,8 @@ import {
   updateEstimationBase,
   upsertOverheadRate,
   importOverheadRates,
+  compareEstimationBases,
+  listApplicableBases,
   listTrees,
   createTree,
   listBreakdowns,
@@ -168,6 +170,18 @@ import {
   approveQuantitySuggestion,
   rejectQuantitySuggestion,
 } from "./services/quantityAi";
+import { generateForecast, forecastSchema } from "./services/forecast";
+import {
+  importConstructionRecords,
+  listConstructionRecords,
+  createConstructionRecord,
+  deleteConstructionRecord,
+  constructionSummary,
+  suggestPriceVersionFromRecords,
+  constructionRecordSchema,
+} from "./services/constructionRecords";
+import { extractDrawingCandidates } from "./services/drawingAi";
+import { buildManagementPdf, buildManagementPptx } from "./services/managementReport";
 import { runScheduledJobs } from "./lib/scheduler";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
@@ -1321,6 +1335,27 @@ app.post("/api/estimation-bases/:id/rates/import", async (c) => {
   }
 });
 
+app.get("/api/estimation-bases/apply-check", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const date = c.req.query("date") ?? new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail(c, "VALIDATION_ERROR", "date は YYYY-MM-DD 形式です。", 400);
+  return ok(c, { result: await listApplicableBases(sql, date) });
+});
+
+app.get("/api/estimation-bases/:id/compare", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const otherId = c.req.query("other_id");
+  if (!otherId) return fail(c, "VALIDATION_ERROR", "other_id が必要です。", 400);
+  try {
+    const result = await compareEstimationBases(sql, c.req.param("id"), otherId);
+    return ok(c, { comparison: result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
 app.get("/api/work-type-trees", async (c) => {
   const sql = getSql(c.env);
   await requireRole(c, sql, ["viewer"]);
@@ -1813,6 +1848,160 @@ app.get("/api/quotations/:id/export", async (c) => {
     return c.body(buffer, 200, {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="cci-quotation-${c.req.param("id").slice(0, 8)}.xlsx"`,
+    });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+// ---- 予測シナリオ / 施工実績 / 図面OCR / 経営レポート ----
+
+app.post("/api/ai/forecast", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["viewer"]);
+  const parsed = forecastSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const result = await generateForecast(sql, c.env, { ...parsed.data, identity });
+    return ok(c, { forecast: result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/construction-records/import", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const form = await c.req.formData().catch(() => null);
+  if (!form) return fail(c, "VALIDATION_ERROR", "multipart/form-data が必要です。", 400);
+  const file = form.get("file");
+  if (!(file instanceof File)) return fail(c, "VALIDATION_ERROR", "file が必要です。", 400);
+  try {
+    const buffer = await file.arrayBuffer();
+    const fileName = file.name.toLowerCase();
+    const rows = fileName.endsWith(".xlsx") ? parseWorkbookRows(buffer) : parseCsv(decodeBuffer(buffer));
+    const result = await importConstructionRecords(sql, { rows, identity });
+    await recordAudit(sql, identity, "construction_record.import", "construction_record", "", { imported: result.imported, errors: result.errors.length });
+    return ok(c, { result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/construction-records", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, {
+    records: await listConstructionRecords(sql, {
+      item_id: c.req.query("item_id") ?? undefined,
+      region_id: c.req.query("region_id") ?? undefined,
+      project_id: c.req.query("project_id") ?? undefined,
+    }),
+  });
+});
+
+app.post("/api/construction-records", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const parsed = constructionRecordSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const id = await createConstructionRecord(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "construction_record.create", "construction_record", String(id));
+    return ok(c, { record_id: id }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.delete("/api/construction-records/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await deleteConstructionRecord(sql, c.req.param("id"));
+    if (!id) return fail(c, "NOT_FOUND", "施工実績が見つかりません。", 404);
+    await recordAudit(sql, identity, "construction_record.delete", "construction_record", String(id));
+    return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/construction-records/summary", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, {
+    summary: await constructionSummary(sql, {
+      item_id: c.req.query("item_id") ?? undefined,
+      region_id: c.req.query("region_id") ?? undefined,
+    }),
+  });
+});
+
+app.post("/api/construction-records/suggest-price", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimator", "estimating_manager", "system_admin", "data_approver"]);
+  const parsed = z
+    .object({
+      item_id: z.string().min(1),
+      region_id: z.string().optional().nullable(),
+      data_source_id: z.string().optional().nullable(),
+    })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const result = await suggestPriceVersionFromRecords(sql, parsed.data, identity);
+    await recordAudit(sql, identity, "price_version.suggest_from_records", "price_version", String(result.price_version_id));
+    return ok(c, { result }, 201);
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/ai/drawing-extract", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const form = await c.req.formData().catch(() => null);
+  if (!form) return fail(c, "VALIDATION_ERROR", "multipart/form-data が必要です。", 400);
+  const file = form.get("file");
+  const projectId = String(form.get("project_id") ?? "");
+  const baseId = String(form.get("base_id") ?? "");
+  if (!(file instanceof File) || !projectId || !baseId) {
+    return fail(c, "VALIDATION_ERROR", "file / project_id / base_id が必要です。", 400);
+  }
+  try {
+    const buffer = await file.arrayBuffer();
+    const result = await extractDrawingCandidates(sql, c.env, { projectId, baseId, fileName: file.name, buffer, identity });
+    await recordAudit(sql, identity, "drawing.ai_extract", "project", projectId, { candidates: result.candidates.length });
+    return ok(c, { result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/reports/management.pdf", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  try {
+    const fontBytes = await getCjkFontBytes(c.env);
+    const buffer = await buildManagementPdf(sql, fontBytes);
+    return c.body(toArrayBuffer(buffer), 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="cci-management-${new Date().toISOString().slice(0, 10)}.pdf"`,
+    });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/reports/management.pptx", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  try {
+    const buffer = await buildManagementPptx(sql);
+    return c.body(toArrayBuffer(buffer), 200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "Content-Disposition": `attachment; filename="cci-management-${new Date().toISOString().slice(0, 10)}.pptx"`,
     });
   } catch (e) {
     return handleError(c, e);

@@ -85,6 +85,34 @@ export default function ExportPage() {
         </p>
       </div>
       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <h2 className="mb-2 text-base font-semibold">経営会議向け 建設コスト総括レポート</h2>
+        <p className="mb-3 text-sm text-gray-600">
+          市況KPI・案件・積算・見積の全体像をPDF（日本語フォント）またはPowerPointで出力します。
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              void downloadFile(api.managementPdfUrl(), "cci-management.pdf")
+                .then(() => setMessage("経営会議資料PDFをダウンロードしました。"))
+                .catch((e) => setMessage(e.message));
+            }}
+            className="rounded-md bg-rose-600 px-4 py-2 text-sm text-white hover:bg-rose-700"
+          >
+            PDF出力
+          </button>
+          <button
+            onClick={() => {
+              void downloadFile(api.managementPptxUrl(), "cci-management.pptx")
+                .then(() => setMessage("経営会議資料PowerPointをダウンロードしました。"))
+                .catch((e) => setMessage(e.message));
+            }}
+            className="rounded-md bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-700"
+          >
+            PowerPoint出力
+          </button>
+        </div>
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
         <h2 className="mb-2 text-base font-semibold">補足</h2>
         <p className="text-sm text-gray-500">
           PDF出力は日本語フォントをサーバー側で取得・埋め込みます。フォント取得に失敗する場合は環境変数

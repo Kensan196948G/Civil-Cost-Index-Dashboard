@@ -769,4 +769,76 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     await get(`/api/quantities/${quantities.body.data.quantities[0].id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKey } });
     await get(`/api/projects/${projectId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKey } });
   }, 15000);
+
+  it("estimation bases: compare / apply-check", async () => {
+    const basesRes = await get("/api/estimation-bases");
+    const mlit = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "MLIT-2026");
+    const port = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "PORT-2026");
+    const cmp = await get(`/api/estimation-bases/${mlit.id}/compare?other_id=${port.id}`);
+    expect(cmp.status).toBe(200);
+    expect(cmp.body.data.comparison.rates.length).toBe(3);
+    const check = await get("/api/estimation-bases/apply-check?date=2026-06-01");
+    expect(check.status).toBe(200);
+    expect(check.body.data.result.bases.some((b: { base_code: string }) => b.base_code === "MLIT-2026")).toBe(true);
+  });
+
+  it("forecast scenario", async () => {
+    const itemsRes = await get("/api/items?category=PRICE_INDEX");
+    const indexItem = itemsRes.body.data.items.find((i: { item_code: string }) => i.item_code === "INDEX_CONSTRUCTION");
+    const res = await get("/api/ai/forecast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! },
+      body: JSON.stringify({ item_id: indexItem.id, horizon_months: 6 }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.data.forecast.scenarios.length).toBe(4);
+    expect(res.body.data.forecast.stats.latest_value).toBeGreaterThan(0);
+  });
+
+  it("construction records: import/create/summary/suggest-price/delete", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const itemRes = await get("/api/items?category=MATERIAL_PRICE");
+    const item = itemRes.body.data.items.find((i: { item_code: string }) => i.item_code === "STEEL_H");
+    const created = await get("/api/construction-records", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ item_id: item.id, work_date: "2026-07-15", quantity: 10, amount: 1200000, unit: "t", source_note: "スモーク実績" }),
+    });
+    expect(created.status).toBe(201);
+    const recordId = created.body.data.record_id;
+    const list = await get(`/api/construction-records?item_id=${item.id}`);
+    expect(list.status).toBe(200);
+    expect(list.body.data.records.length).toBeGreaterThan(0);
+    const summary = await get(`/api/construction-records/summary?item_id=${item.id}`);
+    expect(summary.status).toBe(200);
+    expect(Number(summary.body.data.summary[0].median_unit_price)).toBe(120000);
+    const suggested = await get("/api/construction-records/suggest-price", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ item_id: item.id }),
+    });
+    expect(suggested.status).toBe(201);
+    const pvId = suggested.body.data.result.price_version_id;
+    await get(`/api/price-versions/${pvId}`, { method: "DELETE", headers: admin });
+    await get(`/api/construction-records/${recordId}`, { method: "DELETE", headers: admin });
+  }, 15000);
+
+  it("management reports (pdf/pptx) and drawing-extract requires vision", async () => {
+    const pdf = await app!.fetch(new Request("http://localhost/api/reports/management.pdf"), env);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers.get("content-type")).toContain("application/pdf");
+    const pptx = await app!.fetch(new Request("http://localhost/api/reports/management.pptx"), env);
+    expect(pptx.status).toBe(200);
+    expect(pptx.headers.get("content-type")).toContain("presentationml");
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }), "dummy.png");
+    form.append("project_id", "00000000-0000-0000-0000-000000000000");
+    form.append("base_id", "00000000-0000-0000-0000-000000000000");
+    const draw = await app!.fetch(new Request("http://localhost/api/ai/drawing-extract", {
+      method: "POST",
+      headers: { "X-Admin-Key": process.env.ADMIN_API_KEY! },
+      body: form,
+    }), env);
+    expect(draw.status).toBe(501);
+  }, 15000);
 });

@@ -97,6 +97,18 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | GET | `/api/quantities/ai-suggestions` | AI数量候補一覧（`project_id` / `status` 任意） |
 | POST | `/api/quantities/ai-suggestions/{id}/approve` | AI数量候補の承認（quantitiesへ反映） |
 | POST | `/api/quantities/ai-suggestions/{id}/reject` | AI数量候補の却下 |
+| GET | `/api/estimation-bases/apply-check?date=` | 基準年度の自動適用判定（適用可能な承認済み基準） |
+| GET | `/api/estimation-bases/{id}/compare?other_id=` | 積算基準の新旧差分（諸経費率・歩掛） |
+| POST | `/api/ai/forecast` | 予測シナリオ（参考・計算はコード、AIは説明のみ） |
+| POST | `/api/construction-records/import` | 施工実績CSV/Excel一括取込 |
+| GET | `/api/construction-records` | 施工実績一覧（`item_id` / `region_id` / `project_id`） |
+| POST | `/api/construction-records` | 施工実績登録 |
+| DELETE | `/api/construction-records/{id}` | 施工実績削除 |
+| GET | `/api/construction-records/summary` | 実績単価サマリー（平均・中央値・範囲） |
+| POST | `/api/construction-records/suggest-price` | 実績中央値から採用単価候補（下書き単価版）を作成 |
+| POST | `/api/ai/drawing-extract` | 図面OCRによる数量候補抽出（Vision対応: Anthropicのみ・候補は要承認） |
+| GET | `/api/reports/management.pdf` | 経営会議向け総括PDF |
+| GET | `/api/reports/management.pptx` | 経営会議向け総括PowerPoint |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

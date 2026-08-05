@@ -1,5 +1,16 @@
 # リリースノート
 
+## Unreleased（2026-08-05: 基準差分・予測・施工実績・図面OCR・経営レポート）
+
+- 積算基準の新旧差分（`/api/estimation-bases/{id}/compare`）と基準年度の自動適用判定（`apply-check`）
+- 予測シナリオ（`/api/ai/forecast`）: 統計はコード計算、AIは説明のみ（現状維持/緩やかな上昇/急騰/下落・参考レンジ）
+- 施工実績データ（migration 015）: 取込・一覧・実績単価サマリー・実績中央値からの採用単価候補（下書き）作成
+- 港湾版諸経費率（migration 016）: PORT-2026 に共通仮設15%・現場管理18%・一般管理10%を適用期間付きで登録
+- 図面OCR（`/api/ai/drawing-extract`）: Anthropic Visionで数量候補を抽出し、承認フローへ連携
+- 経営会議向けレポート（`/api/reports/management.pdf` / `.pptx`）
+- Web: 基準比較・適用判定／予測シナリオ（/ai）／施工実績データ画面／図面OCR取込／経営レポート出力
+- テスト132件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: Phase 6 数量計算書ExcelのAI取込）
 
 - `POST /api/quantities/ai-extract`: 数量計算書CSV/Excelから工種体系へ「コード一致→名称一致→類似名称→AI対応付け」で候補を生成

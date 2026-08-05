@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { loadPrefs } from "@/lib/utils";
-import type { EstimationBase } from "@/types/api";
+import type { ApplicableBaseResult, EstimationBase, EstimationBaseComparison } from "@/types/api";
 
 const RATE_LABELS: Record<string, string> = {
   common_temp: "共通仮設費率",
@@ -25,6 +25,10 @@ export default function EstimationBasesPage() {
   });
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importBaseId, setImportBaseId] = useState("");
+  const [compareB, setCompareB] = useState("");
+  const [comparison, setComparison] = useState<EstimationBaseComparison | null>(null);
+  const [checkDate, setCheckDate] = useState(new Date().toISOString().slice(0, 10));
+  const [checkResult, setCheckResult] = useState<ApplicableBaseResult | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,6 +89,27 @@ export default function EstimationBasesPage() {
       await load();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "取込に失敗しました");
+    }
+  };
+
+  const runCompare = async (aId: string) => {
+    setNotice(null);
+    if (!compareB) return;
+    try {
+      const res = await api.compareEstimationBases(aId, compareB);
+      setComparison(res.comparison);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "比較に失敗しました");
+    }
+  };
+
+  const runApplyCheck = async () => {
+    setNotice(null);
+    try {
+      const res = await api.applyCheckBases(checkDate);
+      setCheckResult(res.result);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "判定に失敗しました");
     }
   };
 
@@ -226,6 +251,55 @@ export default function EstimationBasesPage() {
               <button onClick={() => void doImportRates()} disabled={!importFile || !importBaseId} className="rounded-md bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700 disabled:opacity-50">
                 取込
               </button>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-2 text-base font-semibold">積算基準の新旧差分</h2>
+              <div className="flex items-center gap-2">
+                <select className={inputCls} value={compareB} onChange={(e) => setCompareB(e.target.value)}>
+                  <option value="">比較先の基準を選択</option>
+                  {bases.map((b) => <option key={b.id} value={b.id}>{b.base_code} {b.base_name}</option>)}
+                </select>
+                <button onClick={() => void runCompare(bases.find((b) => b.id === importBaseId)?.id ?? bases[0]?.id)} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700">比較</button>
+              </div>
+              {comparison && (
+                <div className="mt-3 text-sm">
+                  <div className="mb-1 text-xs text-gray-500">{comparison.base_a.base_code} → {comparison.base_b.base_code}（変更箇所: {comparison.changed_count}）</div>
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b text-left text-gray-500"><th className="py-1">費目</th><th>旧</th><th>新</th><th>差</th></tr></thead>
+                    <tbody>
+                      {comparison.rates.map((r) => (
+                        <tr key={r.rate_type} className="border-b border-gray-100">
+                          <td className="py-1">{r.rate_type}</td>
+                          <td className="py-1">{r.old ?? "—"}</td>
+                          <td className="py-1">{r.new ?? "—"}</td>
+                          <td className={`py-1 ${r.diff ? "text-red-600" : ""}`}>{r.diff ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-2 text-base font-semibold">基準年度の自動適用判定</h2>
+              <div className="flex items-center gap-2">
+                <input className={inputCls} type="date" value={checkDate} onChange={(e) => setCheckDate(e.target.value)} />
+                <button onClick={() => void runApplyCheck()} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700">判定</button>
+              </div>
+              {checkResult && (
+                <div className="mt-3 text-sm">
+                  {checkResult.warning && <div className="mb-1 text-xs text-amber-700">{checkResult.warning}</div>}
+                  <div className="space-y-1">
+                    {checkResult.bases.map((b) => (
+                      <div key={b.id} className="rounded border border-gray-200 px-3 py-2 text-xs">
+                        {b.base_code} {b.base_name}（{b.fiscal_year}年度・{b.applicable_from}〜{b.applicable_to ?? "当面"}）
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>

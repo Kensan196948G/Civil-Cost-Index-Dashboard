@@ -894,6 +894,86 @@ export interface QuotationDetail extends QuotationSummary {
   comparison: QuotationComparisonRow[];
 }
 
+export interface EstimationBaseComparison {
+  base_a: { base_code: string; base_name: string; fiscal_year: number };
+  base_b: { base_code: string; base_name: string; fiscal_year: number };
+  rates: Array<{ rate_type: string; old: number | null; new: number | null; diff: number | null }>;
+  breakdowns: Array<{
+    tree_code: string;
+    tree_name: string;
+    condition: Record<string, unknown>;
+    exists_in_new: boolean;
+    resources: Array<{ resource_name: string; unit: string; old_quantity: number; new_quantity: number | null; old_unit_price: number; new_unit_price: number | null }>;
+  }>;
+  changed_count: number;
+}
+
+export interface ApplicableBaseResult {
+  date: string;
+  bases: Array<{ id: string; base_code: string; base_name: string; category: string; fiscal_year: number; applicable_from: string; applicable_to: string | null; status: string }>;
+  warning: string | null;
+}
+
+export interface ForecastScenario {
+  name: string;
+  lower: number;
+  upper: number;
+}
+
+export interface ForecastResult {
+  provider: string;
+  model: string | null;
+  stats: {
+    item_name: string;
+    region_name: string;
+    latest_value: number;
+    latest_period: string;
+    sample_months: number;
+    mom_avg: number;
+    mom_std: number;
+    yoy: number | null;
+    min_value: number;
+    max_value: number;
+    horizon_months: number;
+  };
+  scenarios: ForecastScenario[];
+  narrative: string;
+  warnings: string[];
+  disclaimer: string;
+}
+
+export interface ConstructionRecord {
+  id: string;
+  project_id: string | null;
+  project_name: string | null;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  region_id: string | null;
+  region_name: string | null;
+  work_date: string;
+  quantity: number;
+  amount: number;
+  unit: string | null;
+  unit_price: number;
+  supplier_name: string | null;
+  source_note: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ConstructionSummaryRow {
+  item_code: string;
+  item_name: string;
+  region_name: string | null;
+  unit: string | null;
+  record_count: number;
+  avg_unit_price: string;
+  median_unit_price: string;
+  min_unit_price: string;
+  max_unit_price: string;
+}
+
 export interface FetchJob {
   id: string;
   data_source_id: string;

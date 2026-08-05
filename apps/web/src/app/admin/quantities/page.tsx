@@ -24,6 +24,8 @@ export default function QuantitiesPage() {
   const [aiCandidates, setAiCandidates] = useState<QuantityAiCandidate[]>([]);
   const [aiProvider, setAiProvider] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  const [drawingFile, setDrawingFile] = useState<File | null>(null);
+  const [drawingBusy, setDrawingBusy] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -128,6 +130,21 @@ export default function QuantitiesPage() {
     }
   };
 
+  const doDrawingExtract = async () => {
+    setNotice(null);
+    if (!drawingFile || !projectId || !baseId) return;
+    setDrawingBusy(true);
+    try {
+      const res = await api.drawingExtract(drawingFile, projectId, baseId);
+      setAiCandidates((prev) => [...prev, ...res.result.candidates]);
+      setNotice(`図面OCRで ${res.result.candidates.length}件の数量候補を抽出しました。承認後に数量へ反映されます。`);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "図面OCRに失敗しました（Vision対応プロバイダーが必要）");
+    } finally {
+      setDrawingBusy(false);
+    }
+  };
+
   const inputCls = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs font-semibold text-gray-600";
 
@@ -220,6 +237,15 @@ export default function QuantitiesPage() {
                 </tbody>
               </table>
             )}
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <h3 className="mb-1 text-sm font-semibold">図面OCR（PNG/JPEG/WebP・Vision対応プロバイダー）</h3>
+              <div className="flex items-center gap-3">
+                <input type="file" accept=".png,.jpg,.jpeg,.webp" className="text-sm" onChange={(e) => setDrawingFile(e.target.files?.[0] ?? null)} />
+                <button onClick={() => void doDrawingExtract()} disabled={drawingBusy || !drawingFile} className="rounded bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50">
+                  {drawingBusy ? "読み取り中…" : "図面から抽出"}
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}

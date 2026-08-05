@@ -44,6 +44,9 @@ AI抽出: deepseek / deepseek-chat
 
 ## 3. 図面OCR（次段階・サンプル整備中）
 
+`POST /api/ai/drawing-extract` を実装済み（PNG/JPEG/WebP・Anthropic Vision）。
+抽出候補は `quantity_extraction` として保存され、既存の承認フローで `quantities` へ反映できます。
+
 実図面のサンプルがないため、以下の順で整備する。
 
 1. **合成図面PDFの生成**
@@ -56,6 +59,12 @@ AI抽出: deepseek / deepseek-chat
 4. **評価指標**
    - 細別一致率90%以上、数量誤差±5%以内を達成するまで「候補」運用
    - 最終数量は必ず積算担当の確認・承認
+
+### 合成図面サンプル
+
+`apps/api/scripts/generate-synthetic-drawings.mjs`（未作成の場合は本書の手順に従い自前で作成）:
+- 寸法・数量が既知（=正解ラベル）の簡単な平面図・断面図をPDFで生成
+- 正解ラベルCSV（tree_code, quantity）を併せて出力し、AI抽出の一致率・数量誤差率を評価
 
 ## 4. 注意
 

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import AiSummaryCard from "@/components/AiSummaryCard";
 import { ErrorMessage } from "@/components/Status";
 import { api } from "@/lib/api";
-import { downloadBlob, formatPeriod, formatRate } from "@/lib/utils";
-import type { AiAlertsResponse, AiReportResponse, AiStatus, AiTemplate } from "@/types/api";
+import { downloadBlob, formatNumber, formatPeriod, formatRate } from "@/lib/utils";
+import type { AiAlertsResponse, AiReportResponse, AiStatus, AiTemplate, ForecastResult, Item } from "@/types/api";
 
 const REPORT_TYPES = [
   { value: "monthly", label: "月次市況レポート" },
@@ -23,6 +23,10 @@ export default function AiNavPage() {
   const [reportType, setReportType] = useState("monthly");
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [forecastItem, setForecastItem] = useState("");
+  const [forecast, setForecast] = useState<ForecastResult | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -35,6 +39,29 @@ export default function AiNavPage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    void Promise.all([api.items("MATERIAL_PRICE"), api.items("PRICE_INDEX")])
+      .then(([m, i]) => {
+        const all = [...m.items, ...i.items];
+        setItems(all);
+        if (all[0]) setForecastItem(all[0].id);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const runForecast = async () => {
+    setForecastLoading(true);
+    setForecast(null);
+    try {
+      const res = await api.forecast({ item_id: forecastItem, horizon_months: 6 });
+      setForecast(res.forecast);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "予測に失敗しました");
+    } finally {
+      setForecastLoading(false);
+    }
+  };
 
   const loadAlerts = useCallback(async () => {
     setAlertsLoading(true);
@@ -193,6 +220,43 @@ export default function AiNavPage() {
             </>
           )}
         </div>
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-base font-semibold">予測シナリオ（参考）</h2>
+          <div className="flex items-center gap-2">
+            <select className="w-64 rounded border border-gray-300 px-2 py-1.5 text-sm" value={forecastItem} onChange={(e) => setForecastItem(e.target.value)}>
+              {items.map((i) => <option key={i.id} value={i.id}>{i.item_name}</option>)}
+            </select>
+            <button onClick={() => void runForecast()} disabled={forecastLoading || !forecastItem} className="rounded bg-violet-600 px-3 py-1.5 text-sm text-white hover:bg-violet-700 disabled:opacity-50">
+              {forecastLoading ? "計算中…" : "6か月先を試算"}
+            </button>
+          </div>
+        </div>
+        {forecast && (
+          <div className="text-sm">
+            <div className="mb-2 text-xs text-gray-500">
+              {forecast.stats.item_name}（{forecast.stats.region_name}）: 最新 {forecast.stats.latest_value}（{forecast.stats.latest_period}）／
+              月次平均変動 {formatRate(forecast.stats.mom_avg * 100)}／前年比 {forecast.stats.yoy != null ? formatRate(forecast.stats.yoy * 100) : "—"}
+              ／生成元: {forecast.provider}{forecast.model ? ` / ${forecast.model}` : ""}
+            </div>
+            <table className="w-full text-sm">
+              <thead><tr className="border-b text-left text-xs text-gray-600"><th className="py-1">シナリオ</th><th>下限</th><th>上限</th></tr></thead>
+              <tbody>
+                {forecast.scenarios.map((s) => (
+                  <tr key={s.name} className="border-b border-gray-100">
+                    <td className="py-1">{s.name}</td>
+                    <td className="py-1 text-right">{formatNumber(s.lower)}</td>
+                    <td className="py-1 text-right">{formatNumber(s.upper)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {forecast.narrative && <div className="mt-2 rounded bg-gray-50 p-2 text-xs text-gray-700">{forecast.narrative}</div>}
+            {forecast.warnings.map((w, i) => <div key={i} className="mt-1 text-xs text-amber-700">{w}</div>)}
+            <div className="mt-2 text-[11px] text-gray-400">{forecast.disclaimer}</div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import type {
   AiStatus,
   AiSummaryResponse,
   AiTemplate,
+  ApplicableBaseResult,
   ApiEnvelope,
   AuthMe,
   BreakdownSuggestion,
@@ -19,12 +20,14 @@ import type {
   DashboardSummary,
   EstimationBase,
   EstimationBaseInput,
+  EstimationBaseComparison,
   EstimateDetail,
   EstimateSummary,
   FetchJob,
   FetchSchedule,
   FetchScheduleInput,
   FetchUrlInput,
+  ForecastResult,
   Item,
   OperationAuditLog,
   PortEstimate,
@@ -33,6 +36,8 @@ import type {
   QuantityAiCandidate,
   QuantityAiSuggestion,
   QuantityRow,
+  ConstructionRecord,
+  ConstructionSummaryRow,
   PriceSnapshot,
   PriceVersion,
   PriceVersionComparison,
@@ -266,6 +271,8 @@ export const api = {
   estimate: (id: string) => request<{ estimate: EstimateDetail }>(`/api/estimates/${id}`),
   estimateExportUrl: (id: string) => `/api/estimates/${id}/export`,
   estimatePdfExportUrl: (id: string) => `/api/estimates/${id}/export.pdf`,
+  managementPdfUrl: () => `/api/reports/management.pdf`,
+  managementPptxUrl: () => `/api/reports/management.pptx`,
   deleteEstimate: (id: string) =>
     request<{ deleted: boolean }>(`/api/estimates/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
   aiBreakdownSuggest: (input: { project_id: string; base_id: string }) =>
@@ -292,6 +299,42 @@ export const api = {
   deleteChangeOrderLine: (changeOrderId: string, lineId: string) =>
     request<{ deleted: boolean }>(`/api/change-orders/${changeOrderId}/lines/${lineId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
   changeOrderExportUrl: (id: string) => `/api/change-orders/${id}/export`,
+  compareEstimationBases: (id: string, otherId: string) =>
+    request<{ comparison: EstimationBaseComparison }>(`/api/estimation-bases/${id}/compare?other_id=${otherId}`),
+  applyCheckBases: (date: string) =>
+    request<{ result: ApplicableBaseResult }>(`/api/estimation-bases/apply-check?date=${date}`),
+  forecast: (input: { item_id: string; region_id?: string | null; horizon_months?: number }) =>
+    request<{ forecast: ForecastResult }>("/api/ai/forecast", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  constructionRecords: (params?: { item_id?: string; region_id?: string; project_id?: string }) =>
+    request<{ records: ConstructionRecord[] }>(`/api/construction-records${buildQuery(params ?? {})}`),
+  createConstructionRecord: (input: { item_id: string; work_date: string; quantity: number; amount: number; unit?: string | null; source_note?: string | null }) =>
+    request<{ record_id: string }>("/api/construction-records", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  deleteConstructionRecord: (id: string) =>
+    request<{ deleted: boolean }>(`/api/construction-records/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  constructionSummary: (params?: { item_id?: string; region_id?: string }) =>
+    request<{ summary: ConstructionSummaryRow[] }>(`/api/construction-records/summary${buildQuery(params ?? {})}`),
+  suggestPriceFromRecords: (input: { item_id: string; region_id?: string | null }) =>
+    request<{ result: { price_version_id: string; summary: ConstructionSummaryRow } }>("/api/construction-records/suggest-price", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  importConstructionRecords: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request<{ result: { imported: number; errors: Array<{ row: number; column: string; reason: string }> } }>("/api/construction-records/import", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: fd,
+    });
+  },
+  drawingExtract: (file: File, projectId: string, baseId: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("project_id", projectId);
+    fd.append("base_id", baseId);
+    return request<{ result: { provider: string; model: string | null; candidates: QuantityAiCandidate[]; suggestion_ids: string[] } }>("/api/ai/drawing-extract", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: fd,
+    });
+  },
   quotations: (projectId?: string) =>
     request<{ quotations: QuotationSummary[] }>(`/api/quotations${projectId ? `?project_id=${projectId}` : ""}`),
   createQuotation: (input: {

@@ -185,6 +185,94 @@ export async function listEstimationBases(sql: Sql) {
   }));
 }
 
+export async function listApplicableBases(sql: Sql, date: string) {
+  const rows = await sql`
+    SELECT id, base_code, base_name, category, fiscal_year, applicable_from, applicable_to, status
+    FROM estimation_bases
+    WHERE status = 'approved'
+      AND applicable_from <= ${date}::date
+      AND (applicable_to IS NULL OR applicable_to >= ${date}::date)
+    ORDER BY applicable_from DESC, fiscal_year DESC
+  `;
+  return {
+    date,
+    bases: rows,
+    warning:
+      rows.length === 0
+        ? "適用可能な承認済み積算基準がありません。"
+        : rows.length > 1
+          ? "適用可能な積算基準が複数あります。適用範囲（applicable_to）を確認してください。"
+          : null,
+  };
+}
+
+export async function compareEstimationBases(sql: Sql, idA: string, idB: string) {
+  const [a] = (await sql`
+    SELECT id, base_code, base_name, fiscal_year, applicable_from, applicable_to
+    FROM estimation_bases WHERE id = ${idA}
+  `) as DbRow[];
+  const [b] = (await sql`
+    SELECT id, base_code, base_name, fiscal_year, applicable_from, applicable_to
+    FROM estimation_bases WHERE id = ${idB}
+  `) as DbRow[];
+  if (!a || !b) {
+    const err = new Error("積算基準が見つかりません。");
+    (err as Error & { status?: number }).status = 404;
+    throw err;
+  }
+  const ratesA = await sql`SELECT rate_type, rate FROM overhead_rates WHERE base_id = ${idA}`;
+  const ratesB = await sql`SELECT rate_type, rate FROM overhead_rates WHERE base_id = ${idB}`;
+  const rateMapA = new Map(ratesA.map((r) => [String(r.rate_type), Number(r.rate)]));
+  const rateMapB = new Map(ratesB.map((r) => [String(r.rate_type), Number(r.rate)]));
+  const rateTypes = ["common_temp", "site_management", "general_management"];
+  const rates = rateTypes.map((rt) => ({
+    rate_type: rt,
+    old: rateMapA.get(rt) ?? null,
+    new: rateMapB.get(rt) ?? null,
+    diff: rateMapA.has(rt) && rateMapB.has(rt) ? (rateMapB.get(rt) ?? 0) - (rateMapA.get(rt) ?? 0) : null,
+  }));
+
+  const bdA = await listBreakdowns(sql, { baseId: idA });
+  const bdB = await listBreakdowns(sql, { baseId: idB });
+  const keyOf = (bd: BreakdownRow) => `${bd.tree_id}|${JSON.stringify(bd.condition_json)}`;
+  const mapB = new Map(bdB.map((bd) => [keyOf(bd), bd]));
+  const breakdownDiffs: Array<Record<string, unknown>> = [];
+  for (const bd of bdA) {
+    const other = mapB.get(keyOf(bd));
+    const resourceKey = (r: ResourceItem) => `${r.name}|${r.unit}`;
+    const resourcesA = [...bd.labor, ...bd.material, ...bd.machinery];
+    const resourcesB = other ? [...other.labor, ...other.material, ...other.machinery] : [];
+    const mapBRes = new Map(resourcesB.map((r) => [resourceKey(r), r]));
+    const diffs = resourcesA.map((r) => {
+      const o = mapBRes.get(resourceKey(r));
+      return {
+        resource_name: r.name,
+        unit: r.unit,
+        old_quantity: r.quantity,
+        new_quantity: o?.quantity ?? null,
+        old_unit_price: r.unit_price,
+        new_unit_price: o?.unit_price ?? null,
+      };
+    });
+    breakdownDiffs.push({
+      tree_code: bd.tree_code,
+      tree_name: bd.tree_name,
+      condition: bd.condition_json,
+      exists_in_new: !!other,
+      resources: diffs,
+    });
+  }
+  return {
+    base_a: a,
+    base_b: b,
+    rates,
+    breakdowns: breakdownDiffs,
+    changed_count:
+      rates.filter((r) => r.diff !== 0).length +
+      breakdownDiffs.filter((bd) => !bd.exists_in_new || (bd.resources as Array<{ old_quantity: number; new_quantity: number | null; old_unit_price: number; new_unit_price: number | null }>).some((r) => r.old_quantity !== r.new_quantity || r.old_unit_price !== r.new_unit_price)).length,
+  };
+}
+
 export async function createEstimationBase(
   sql: Sql,
   input: z.infer<typeof estimationBaseSchema>,

@@ -20,6 +20,7 @@ const MENU = [
     { href: "/admin/quantities", label: "数量計算書", icon: "№" },
     { href: "/admin/change-orders", label: "設計変更・差額", icon: "⇄" },
     { href: "/admin/quotations", label: "見積比較・査定", icon: "≍" },
+    { href: "/admin/construction-records", label: "施工実績データ", icon: "▦" },
   ]},
   { group: "AI分析", items: [
     { href: "/ai", label: "AI市況ナビ", icon: "✦" },

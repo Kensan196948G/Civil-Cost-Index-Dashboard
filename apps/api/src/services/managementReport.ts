@@ -6,7 +6,56 @@ import { listQuotations } from "./quotations";
 import { buildPdfReport } from "./exportPdf";
 import { buildPptx } from "./exportPptx";
 
-export async function buildManagementReportData(sql: Sql) {
+export const MANAGEMENT_AUDIENCES = ["executive", "estimator", "sales"] as const;
+export type ManagementAudience = (typeof MANAGEMENT_AUDIENCES)[number];
+
+export function audienceLabel(audience: ManagementAudience): string {
+  return audience === "executive" ? "経営層" : audience === "estimator" ? "積算担当" : "営業";
+}
+
+export type ManagementData = {
+  audience: ManagementAudience;
+  audience_label: string;
+  highlights: string[];
+  latest_period: string | null;
+  last_updated_at: string | null;
+  kpis: Array<{ name: string; value: number | null | undefined; unit: string; period: string | null | undefined }>;
+  alerts_count: number;
+  project_count: number;
+  project_base_total: number;
+  estimate_count: number;
+  estimate_total: number;
+  quotation_count: number;
+  project_profit: Array<{ project_name: string; base_total: number; estimate_total: number; margin_rate: number | null }>;
+  project_profit_avg: number | null;
+  port_availability: number | null;
+  port_estimate_count: number;
+  adopted_vs_actual: Array<{ item_name: string; adopted_unit_price: number; actual_median: number | null; ratio: number | null }>;
+};
+
+export function audienceHighlights(audience: ManagementAudience, d: ManagementData): string[] {
+  if (audience === "estimator") {
+    return [
+      `積算結果: ${d.estimate_count}件（合計 ${Math.round(d.estimate_total).toLocaleString("ja-JP")}円）`,
+      `採用単価対実績: ${d.adopted_vs_actual.length}品目`,
+      `案件数: ${d.project_count}件`,
+    ];
+  }
+  if (audience === "sales") {
+    return [
+      `案件数: ${d.project_count}件（ベース額 ${Math.round(d.project_base_total).toLocaleString("ja-JP")}円）`,
+      `見積件数: ${d.quotation_count}件`,
+      `案件別粗利率（平均）: ${d.project_profit_avg != null ? `${d.project_profit_avg.toFixed(1)}%` : "—"}`,
+    ];
+  }
+  return [
+    `市況: 最新 ${d.latest_period ?? "—"}／注目変動 ${d.alerts_count}件`,
+    `案件 ${d.project_count}件・積算合計 ${Math.round(d.estimate_total).toLocaleString("ja-JP")}円`,
+    `港湾稼働率（平均）: ${d.port_availability != null ? `${(d.port_availability * 100).toFixed(1)}%` : "—"}`,
+  ];
+}
+
+export async function buildManagementReportData(sql: Sql, audience: ManagementAudience = "executive"): Promise<ManagementData> {
   const [summary, projects, estimates, quotations] = await Promise.all([
     getDashboardSummary(sql, { period: "1y" }),
     listProjects(sql),
@@ -56,7 +105,10 @@ export async function buildManagementReportData(sql: Sql) {
       ratio: median != null && Number(median) !== 0 ? Number(a.unit_price) / Number(median) : null,
     });
   }
-  return {
+  const data: ManagementData = {
+    audience,
+    audience_label: audienceLabel(audience),
+    highlights: [],
     latest_period: summary.latest_period,
     last_updated_at: summary.last_updated_at,
     kpis: summary.kpis,
@@ -75,19 +127,23 @@ export async function buildManagementReportData(sql: Sql) {
     port_estimate_count: portEstimateCount,
     adopted_vs_actual: adoptedVsActual,
   };
+  data.highlights = audienceHighlights(audience, data);
+  return data;
 }
 
 export async function buildManagementPdf(
   sql: Sql,
-  fontBytes?: Uint8Array
+  fontBytes?: Uint8Array,
+  audience: ManagementAudience = "executive"
 ): Promise<Uint8Array> {
-  const d = await buildManagementReportData(sql);
+  const d = await buildManagementReportData(sql, audience);
   const kpiRows = d.kpis.map((k) => [k.name, String(k.value), String(k.period)]);
   return buildPdfReport({
-    title: "経営会議向け 建設コスト総括レポート",
+    title: `建設コスト総括レポート（${d.audience_label}向け）`,
     subtitle: `対象: ${d.latest_period ?? "—"} ／ 生成: ${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`,
     disclaimer: "本レポートは参考情報です。積算・契約・経営判断の最終根拠は出典元の公表値と専門家の確認を経てください。",
     sections: [
+      { heading: "ハイライト", rows: d.highlights.map((h) => [h, "", ""]) },
       { heading: "市況（KPI）", rows: [["指標", "値", "対象年月"], ...kpiRows, ["注目変動", String(d.alerts_count), ""]] },
       { heading: "案件・積算", rows: [["案件数", String(d.project_count), ""], ["案件ベース額合計", String(Math.round(d.project_base_total)), "円"], ["積算結果数", String(d.estimate_count), ""], ["積算合計", String(Math.round(d.estimate_total)), "円"]] },
       { heading: "見積・査定", rows: [["見積件数", String(d.quotation_count), ""]] },
@@ -109,12 +165,17 @@ export async function buildManagementPdf(
   });
 }
 
-export async function buildManagementPptx(sql: Sql): Promise<Uint8Array> {
-  const d = await buildManagementReportData(sql);
+export async function buildManagementPptx(sql: Sql, audience: ManagementAudience = "executive"): Promise<Uint8Array> {
+  const d = await buildManagementReportData(sql, audience);
   return buildPptx({
     title: "経営会議向け 建設コスト総括",
     subtitle: `対象: ${d.latest_period ?? "—"} ／ ${new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`,
     slides: [
+      {
+        title: "ハイライト",
+        subtitle: "利用者別の要点",
+        lines: d.highlights,
+      },
       {
         title: "市況",
         subtitle: "主要指標",

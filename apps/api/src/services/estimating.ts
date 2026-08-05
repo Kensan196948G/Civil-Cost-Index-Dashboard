@@ -12,6 +12,7 @@ import {
 import { generateAiText } from "../lib/ai";
 import type { CsvRow } from "../lib/csv";
 import { resolveDredgingOptions, resolveShiftRules } from "./portModels";
+import { notifyAiApproval } from "./schedules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB driver boundary
 type DbRow = Record<string, any>;
@@ -1033,7 +1034,7 @@ export async function aiSuggestBreakdowns(
       system:
         "あなたは公共土木積算の歩掛選定支援AIです。計算は行わず、候補選定の理由を提示してください。JSON配列のみ返してください。",
       prompt,
-    });
+    }, "breakdown");
     if (res) {
       provider = res.provider;
       model = res.model;
@@ -1070,6 +1071,16 @@ export async function aiSuggestBreakdowns(
          ${JSON.stringify({ tree_code: r.tree_code, tree_name: r.tree_name, breakdown_id: r.breakdown_id, score: r.score })},
          ${r.reason}, ${provider}, ${model}, ${identity.email})
     `;
+  }
+  try {
+    await notifyAiApproval(
+      sql,
+      env,
+      `[CCI] AI歩掛候補 承認依頼（${rows.length}件）`,
+      `案件 ${projectId} にAI歩掛候補${rows.length}件が生成されました。承認待ちです。`
+    );
+  } catch (e) {
+    console.warn("breakdown_suggest_notify_failed", e);
   }
   return { provider, model, suggestions: rows };
 }

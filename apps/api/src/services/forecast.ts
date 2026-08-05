@@ -88,7 +88,7 @@ export async function generateForecast(
           scenarios,
           output_format: '{"overview":"...","notes":["..."]}',
         }),
-      });
+      }, "forecast");
       if (res) {
         provider = res.provider;
         model = res.model;

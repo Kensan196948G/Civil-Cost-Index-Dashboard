@@ -111,12 +111,18 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | GET | `/api/reports/management.pptx` | 経営会議向け総括PowerPoint |
 | GET | `/api/reports/management.json` | 経営KPIデータ（案件別粗利・港湾稼働率・採用単価対実績） |
 | GET | `/api/port-models/readiness` | 港湾積算の運用準備状況チェック |
+| GET | `/api/port-models/validate-coefficients` | 港湾係数データの照合検証（損料・歩掛・諸経費率・海象・土質/運搬/土捨場） |
 | POST | `/api/rag/index` | RAG索引の再構築（積算基準・歩掛・過去案件をpgvectorへ） |
 | POST | `/api/rag/search` | ベクトル類似検索 |
 | POST | `/api/rag/ask` | 根拠付きAI回答（引用番号付き・要監査ログ） |
 | POST | `/api/ai/quotation-review/{id}` | 見積比較からAI査定コメント生成（候補・要承認） |
 | POST | `/api/ai/forecast/evaluate` | 予測の実績値記録・誤差率算定 |
 | GET | `/api/ai/forecast/evaluations` | 予測実績誤差の履歴（データ充足度含む） |
+
+`/api/reports/management.*` は `?audience=executive|estimator|sales` でハイライトを変更できます。
+AI候補（数量・歩掛・査定・図面OCR）の生成時は Teams/Slack に承認依頼が通知されます
+（`NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL` 未設定時は `notifications_log` に skipped として記録）。
+タスク別ルーティングは `AI_ROUTING`（JSON）で指定します（例: `{"summary":"deepseek","report":"anthropic"}`）。
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

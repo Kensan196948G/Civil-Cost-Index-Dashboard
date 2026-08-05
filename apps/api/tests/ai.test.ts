@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { extractWorkersAiText, generateAiText, getAiProviderInfo, maskSensitive } from "../src/lib/ai";
+import { extractWorkersAiText, generateAiText, getAiProviderInfo, getAiProviderInfoForTask, maskSensitive } from "../src/lib/ai";
 import { buildSeriesFacts, computeStreak, monthsBetween, summarizeFacts } from "../src/services/aiFacts";
 import { buildFallbackSummary, buildSummaryPrompt } from "../src/services/aiSummary";
 import { buildFallbackExplanation } from "../src/services/aiAlerts";
@@ -71,6 +71,25 @@ describe("getAiProviderInfo", () => {
   it("deepseek model override", () => {
     const info = getAiProviderInfo({ ...baseEnv, DEEPSEEK_API_KEY: "ds-key", DEEPSEEK_MODEL: "deepseek-reasoner" });
     expect(info.model).toBe("deepseek-reasoner");
+  });
+  it("routes by task when AI_ROUTING configured", () => {
+    const info = getAiProviderInfoForTask(
+      { ...baseEnv, DEEPSEEK_API_KEY: "ds-key", ANTHROPIC_API_KEY: "sk-test", AI_ROUTING: JSON.stringify({ summary: "deepseek", report: "anthropic" }) },
+      "summary"
+    );
+    expect(info.provider).toBe("deepseek");
+    const report = getAiProviderInfoForTask(
+      { ...baseEnv, DEEPSEEK_API_KEY: "ds-key", ANTHROPIC_API_KEY: "sk-test", AI_ROUTING: JSON.stringify({ report: "anthropic" }) },
+      "report"
+    );
+    expect(report.provider).toBe("anthropic");
+  });
+  it("falls back to default priority when routed provider not configured", () => {
+    const info = getAiProviderInfoForTask(
+      { ...baseEnv, ANTHROPIC_API_KEY: "sk-test", AI_ROUTING: JSON.stringify({ summary: "perplexity" }) },
+      "summary"
+    );
+    expect(info.provider).toBe("anthropic");
   });
 });
 

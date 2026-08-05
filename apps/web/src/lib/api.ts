@@ -353,8 +353,8 @@ export const api = {
   forecastEvaluations: (itemId?: string) =>
     request<{ evaluations: ForecastEvaluation[] }>(`/api/ai/forecast/evaluations${itemId ? `?item_id=${itemId}` : ""}`),
   portReadiness: () => request<{ readiness: PortReadiness }>("/api/port-models/readiness"),
-  managementData: () =>
-    request<{ data: Record<string, unknown> }>("/api/reports/management.json"),
+  managementData: (audience?: string) =>
+    request<{ data: Record<string, unknown> }>(`/api/reports/management.json${audience ? `?audience=${audience}` : ""}`),
   quotations: (projectId?: string) =>
     request<{ quotations: QuotationSummary[] }>(`/api/quotations${projectId ? `?project_id=${projectId}` : ""}`),
   createQuotation: (input: {

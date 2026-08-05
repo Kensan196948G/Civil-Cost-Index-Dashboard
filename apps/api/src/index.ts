@@ -29,7 +29,7 @@ import { buildPdfExport, getCjkFontBytes } from "./services/exportPdf";
 import { buildEstimateXlsx } from "./services/exportEstimateXlsx";
 import { buildEstimatePdf } from "./services/exportEstimatePdf";
 import { parsePeriod } from "./lib/stats";
-import { getAiProviderInfo, getAvailableProviders } from "./lib/ai";
+import { getAiProviderInfo, getAvailableProviders, getRoutingConfig } from "./lib/ai";
 import { buildMarketSummary, type Audience } from "./services/aiSummary";
 import { explainAlerts } from "./services/aiAlerts";
 import { generateReport, REPORT_TYPE_LABELS, type ReportType } from "./services/aiReport";
@@ -181,11 +181,11 @@ import {
   constructionRecordSchema,
 } from "./services/constructionRecords";
 import { extractDrawingCandidates } from "./services/drawingAi";
-import { buildManagementPdf, buildManagementPptx, buildManagementReportData } from "./services/managementReport";
+import { buildManagementPdf, buildManagementPptx, buildManagementReportData, MANAGEMENT_AUDIENCES, type ManagementAudience } from "./services/managementReport";
 import { reindexAll, searchChunks, askRag, ragAskSchema } from "./services/rag";
 import { evaluateForecast, listForecastEvaluations } from "./services/forecast";
 import { reviewQuotation } from "./services/quotations";
-import { portReadiness } from "./services/portModels";
+import { portReadiness, validatePortCoefficients } from "./services/portModels";
 import { runScheduledJobs } from "./lib/scheduler";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
@@ -210,6 +210,11 @@ function parseCsvList(value: string | undefined): string[] | undefined {
 
 function parseBool(value: string | undefined): boolean {
   return value === "true" || value === "1" || value === "yes";
+}
+
+function parseAudience(value: string | undefined): ManagementAudience | null {
+  if (!value) return "executive";
+  return (MANAGEMENT_AUDIENCES as readonly string[]).includes(value) ? (value as ManagementAudience) : null;
 }
 
 function validatePeriod(value: string | undefined, name: string): string | null {
@@ -2026,9 +2031,11 @@ app.post("/api/ai/drawing-extract", async (c) => {
 app.get("/api/reports/management.pdf", async (c) => {
   const sql = getSql(c.env);
   await requireRole(c, sql, ["viewer"]);
+  const audience = parseAudience(c.req.query("audience"));
+  if (!audience) return fail(c, "VALIDATION_ERROR", "audience は executive / estimator / sales のいずれかです。", 400);
   try {
     const fontBytes = await getCjkFontBytes(c.env);
-    const buffer = await buildManagementPdf(sql, fontBytes);
+    const buffer = await buildManagementPdf(sql, fontBytes, audience);
     return c.body(toArrayBuffer(buffer), 200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="cci-management-${new Date().toISOString().slice(0, 10)}.pdf"`,
@@ -2041,8 +2048,10 @@ app.get("/api/reports/management.pdf", async (c) => {
 app.get("/api/reports/management.pptx", async (c) => {
   const sql = getSql(c.env);
   await requireRole(c, sql, ["viewer"]);
+  const audience = parseAudience(c.req.query("audience"));
+  if (!audience) return fail(c, "VALIDATION_ERROR", "audience は executive / estimator / sales のいずれかです。", 400);
   try {
-    const buffer = await buildManagementPptx(sql);
+    const buffer = await buildManagementPptx(sql, audience);
     return c.body(toArrayBuffer(buffer), 200, {
       "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "Content-Disposition": `attachment; filename="cci-management-${new Date().toISOString().slice(0, 10)}.pptx"`,
@@ -2055,13 +2064,21 @@ app.get("/api/reports/management.pptx", async (c) => {
 app.get("/api/reports/management.json", async (c) => {
   const sql = getSql(c.env);
   await requireRole(c, sql, ["viewer"]);
-  return ok(c, { data: await buildManagementReportData(sql) });
+  const audience = parseAudience(c.req.query("audience"));
+  if (!audience) return fail(c, "VALIDATION_ERROR", "audience は executive / estimator / sales のいずれかです。", 400);
+  return ok(c, { data: await buildManagementReportData(sql, audience) });
 });
 
 app.get("/api/port-models/readiness", async (c) => {
   const sql = getSql(c.env);
   await requireRole(c, sql, ["viewer"]);
   return ok(c, { readiness: await portReadiness(sql) });
+});
+
+app.get("/api/port-models/validate-coefficients", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { validation: await validatePortCoefficients(sql) });
 });
 
 app.post("/api/rag/index", async (c) => {
@@ -2130,6 +2147,7 @@ app.get("/api/ai/status", (c) => {
     provider: info.provider,
     model: info.model,
     providers: getAvailableProviders(c.env),
+    routing: getRoutingConfig(c.env),
     provider_label: info.provider === "none" ? "未設定" : getAvailableProviders(c.env).find((p) => p.provider === info.provider)?.label ?? info.provider,
     features: ["summary", "alert_explain", "report", "quality", "templates", "audit"],
   });

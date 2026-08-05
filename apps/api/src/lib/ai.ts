@@ -71,6 +71,31 @@ export function getAiProviderInfo(env: Env): AiProviderInfo {
   return { provider: "none", model: null };
 }
 
+export function getAiProviderInfoForTask(env: Env, task?: string): AiProviderInfo {
+  if (!task) return getAiProviderInfo(env);
+  let routing: Record<string, string> = {};
+  try {
+    routing = env.AI_ROUTING ? (JSON.parse(env.AI_ROUTING) as Record<string, string>) : {};
+  } catch {
+    routing = {};
+  }
+  const mapped = (routing[task] ?? "").trim().toLowerCase();
+  if (mapped) {
+    const forced = { ...env, AI_PROVIDER: mapped };
+    const info = getAiProviderInfo(forced);
+    if (info.provider !== "none") return info;
+  }
+  return getAiProviderInfo(env);
+}
+
+export function getRoutingConfig(env: Env): Record<string, string> {
+  try {
+    return env.AI_ROUTING ? (JSON.parse(env.AI_ROUTING) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
 export function getAvailableProviders(env: Env): AiProviderDetail[] {
   return [
     {
@@ -102,9 +127,10 @@ export function getAvailableProviders(env: Env): AiProviderDetail[] {
 
 export async function generateAiText(
   env: Env,
-  opts: { system: string; prompt: string; maxTokens?: number }
+  opts: { system: string; prompt: string; maxTokens?: number },
+  task?: string
 ): Promise<AiGenerateResult | null> {
-  const info = getAiProviderInfo(env);
+  const info = getAiProviderInfoForTask(env, task);
   if (info.provider === "none" || !info.model) return null;
   const started = Date.now();
 

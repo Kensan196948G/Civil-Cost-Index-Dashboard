@@ -4,6 +4,7 @@ import type { Env } from "../types";
 import type { Identity } from "../lib/auth";
 import { getAiProviderInfo } from "../lib/ai";
 import { listTrees } from "./estimating";
+import { notifyAiApproval } from "./schedules";
 
 function base64FromBuffer(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -118,6 +119,16 @@ export async function extractDrawingCandidates(
       RETURNING id
     `;
     suggestionIds.push(String(row.id));
+  }
+  try {
+    await notifyAiApproval(
+      sql,
+      env,
+      `[CCI] 図面OCR候補 承認依頼（${candidates.length}件）`,
+      `案件 ${input.projectId} に図面OCR数量候補${candidates.length}件が生成されました。承認待ちです。`
+    );
+  } catch (e) {
+    console.warn("drawing_ai_notify_failed", e);
   }
   return { provider: info.provider, model: info.model, candidates: candidates.map((c, i) => ({ ...c, suggestion_id: suggestionIds[i] })), suggestion_ids: suggestionIds };
 }

@@ -516,3 +516,57 @@ export async function portReadiness(sql: Sql) {
       : "マスタが不足しています。3経路の取込で係数データを投入してください。",
   };
 }
+
+export async function validatePortCoefficients(sql: Sql) {
+  const issues: string[] = [];
+  const vessels = await sql`
+    SELECT vessel_code, vessel_name, hire_rate_per_day, availability_factor, mobilization_days
+    FROM vessels WHERE is_active = true
+  `;
+  for (const v of vessels) {
+    if (Number(v.hire_rate_per_day) <= 0) issues.push(`船舶 ${v.vessel_name}: 損料が0以下`);
+    const af = Number(v.availability_factor);
+    if (af <= 0 || af > 1) issues.push(`船舶 ${v.vessel_name}: 供用係数が0〜1の範囲外（${af}）`);
+    if (Number(v.mobilization_days) < 0) issues.push(`船舶 ${v.vessel_name}: 回航日数が負`);
+  }
+  const trees = await sql`
+    SELECT wt.code, wt.name FROM work_type_trees wt
+    JOIN estimation_bases b ON b.id = wt.base_id
+    WHERE b.base_code = 'PORT-2026'
+    ORDER BY wt.code
+  `;
+  if (trees.length < 3) issues.push(`港湾工種体系が不足（${trees.length}/3）`);
+  const missingBreakdowns = await sql`
+    SELECT wt.code, wt.name FROM work_type_trees wt
+    JOIN estimation_bases b ON b.id = wt.base_id
+    WHERE b.base_code = 'PORT-2026'
+      AND NOT EXISTS (SELECT 1 FROM work_breakdowns wb WHERE wb.tree_id = wt.id)
+  `;
+  for (const m of missingBreakdowns) issues.push(`歩掛なし: ${m.code} ${m.name}`);
+  const rates = await sql`
+    SELECT orr.rate_type, orr.rate FROM overhead_rates orr
+    JOIN estimation_bases b ON b.id = orr.base_id
+    WHERE b.base_code = 'PORT-2026'
+  `;
+  if (rates.length < 3) issues.push(`港湾諸経費率が不足（${rates.length}/3）`);
+  for (const r of rates) {
+    const rate = Number(r.rate);
+    if (rate <= 0 || rate >= 1) issues.push(`諸経費率 ${r.rate_type} が0〜1の範囲外（${rate}）`);
+  }
+  const seaAreas = await sql`
+    SELECT sea_area_code, count(*)::int AS c FROM port_sea_conditions GROUP BY sea_area_code
+  `;
+  for (const a of seaAreas) {
+    if (Number(a.c) < 12) issues.push(`海象条件 ${a.sea_area_code}: 12ヶ月未満（${a.c}）`);
+  }
+  if (seaAreas.length === 0) issues.push("海象条件が未登録");
+  const counts = await Promise.all([
+    sql`SELECT count(*)::int AS c FROM soil_types`,
+    sql`SELECT count(*)::int AS c FROM dredging_transport_rates`,
+    sql`SELECT count(*)::int AS c FROM spoil_grounds`,
+  ]);
+  if (Number(counts[0][0].c) === 0) issues.push("土質マスタが未登録");
+  if (Number(counts[1][0].c) === 0) issues.push("運搬距離係数が未登録");
+  if (Number(counts[2][0].c) === 0) issues.push("土捨場・処分場が未登録");
+  return { ok: issues.length === 0, issues };
+}

@@ -26,6 +26,8 @@ export type Env = {
   AI_MODEL?: string;
   /** 任意: AIプロバイダーの強制指定 anthropic / deepseek / perplexity / workers-ai / none */
   AI_PROVIDER?: string;
+  /** 任意: タスク種別ごとのルーティングJSON（例: {"summary":"deepseek","report":"anthropic"}） */
+  AI_ROUTING?: string;
   /** Workers AI バインディング（Workersデプロイ時のみ） */
   AI?: WorkersAiBinding;
   /** 任意: Cloudflare Access のチームドメイン（例: example.cloudflareaccess.com） */

@@ -69,6 +69,16 @@ export async function notify(
   }
 }
 
+/** AI候補の承認依頼を通知（未設定時は notifications_log に skipped として記録） */
+export async function notifyAiApproval(
+  sql: Sql,
+  env: Pick<Env, "NOTIFY_TEAMS_URL" | "NOTIFY_SLACK_URL">,
+  subject: string,
+  message: string
+): Promise<void> {
+  await notify(sql, env, ["teams", "slack"], subject, message);
+}
+
 export async function listSchedules(sql: Sql) {
   const rows = await sql`
     SELECT fs.id, fs.data_source_id, ds.source_name, ds.source_code,

@@ -5,6 +5,7 @@ import type { Identity } from "../lib/auth";
 import { generateAiText } from "../lib/ai";
 import type { CsvRow } from "../lib/csv";
 import { listTrees } from "./estimating";
+import { notifyAiApproval } from "./schedules";
 
 export type QuantityCandidate = {
   suggestion_id: string | null;
@@ -128,7 +129,7 @@ export async function extractQuantityCandidates(
       const res = await generateAiText(env, {
         system: "あなたは建設積算の数量入力支援AIです。JSON配列のみ返してください。",
         prompt,
-      });
+      }, "quantity");
       if (res) {
         provider = res.provider;
         model = res.model;
@@ -176,6 +177,16 @@ export async function extractQuantityCandidates(
     `;
     c.suggestion_id = String(row.id);
     suggestionIds.push(String(row.id));
+  }
+  try {
+    await notifyAiApproval(
+      sql,
+      env,
+      `[CCI] AI数量候補 承認依頼（${candidates.length}件）`,
+      `案件 ${projectId} にAI数量候補${candidates.length}件が生成されました。承認待ちです。`
+    );
+  } catch (e) {
+    console.warn("quantity_ai_notify_failed", e);
   }
   return { provider, model, candidates, suggestion_ids: suggestionIds };
 }

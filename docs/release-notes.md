@@ -1,5 +1,13 @@
 # リリースノート
 
+## Unreleased（2026-08-05: ルーティング・承認通知・照合検証・利用者別KPI）
+
+- AIプロバイダールーティング: `AI_ROUTING`（JSON）でタスク種別ごとにAnthropic/DeepSeek/Perplexity/Workers AIを自動選択。未設定プロバイダーへは既定優先順位へフォールバック
+- AI候補の承認依頼通知: 数量AI・歩掛AI・査定AI・図面OCRの候補生成時にTeams/Slackへ通知（未設定時はnotifications_logにskipped記録）
+- 港湾係数の照合検証: `GET /api/port-models/validate-coefficients`（損料・供用係数・歩掛・諸経費率・海象・土質/運搬/土捨場を検証）
+- 利用者別経営KPI: `management.*?audience=executive|estimator|sales`（ハイライト切替）。`/admin/management` に利用者セレクタを追加
+- テスト137件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: RAG・AI査定・予測評価・運用準備・経営KPI）
 
 - RAG・自然言語検索（migration 017）

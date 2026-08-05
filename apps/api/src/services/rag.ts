@@ -180,7 +180,7 @@ export async function askRag(
       system:
         "あなたは建設コストの資料検索AIです。与えられた資料のみを根拠に、引用番号[1][2]...付きで回答してください。資料に無いことは「資料に記載がありません」と回答してください。",
       prompt: `質問: ${query}\n\n資料:\n${sourceText}`,
-    });
+    }, "rag");
     if (res) {
       provider = res.provider;
       model = res.model;

@@ -10,6 +10,7 @@ import {
 } from "../lib/quotations";
 import { generateAiText } from "../lib/ai";
 import type { Env } from "../types";
+import { notifyAiApproval } from "./schedules";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB driver boundary
 type DbRow = Record<string, any>;
@@ -342,7 +343,7 @@ export async function reviewQuotation(
         comparison: comparisonText,
         output_format: '{"summary":"...","comments":["..."],"recommendations":["..."]}',
       }),
-    });
+    }, "review");
     if (res) {
       provider = res.provider;
       model = res.model;
@@ -362,7 +363,17 @@ export async function reviewQuotation(
     VALUES
       ('quotation_review', 'quotation', ${id},
        ${JSON.stringify(review)},
-       ${`見積比較 ${quotation.comparison.length}行から査定コメント生成`}, ${provider}, ${model}, ${identity.email})
+      ${`見積比較 ${quotation.comparison.length}行から査定コメント生成`}, ${provider}, ${model}, ${identity.email})
   `;
+  try {
+    await notifyAiApproval(
+      sql,
+      env,
+      `[CCI] AI査定コメント 承認依頼`,
+      `見積 ${quotation.supplier_name} のAI査定コメントが生成されました。承認待ちです。`
+    );
+  } catch (e) {
+    console.warn("quotation_review_notify_failed", e);
+  }
   return { provider, model, review };
 }

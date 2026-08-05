@@ -23,6 +23,7 @@ export default function PortPage() {
   });
   const [shiftRules, setShiftRules] = useState<ShiftRule[]>([]);
   const [readiness, setReadiness] = useState<PortReadiness | null>(null);
+  const [validation, setValidation] = useState<{ ok: boolean; issues: string[] } | null>(null);
   const [shiftForm, setShiftForm] = useState({
     rule_code: "", rule_name: "", shift_type: "night", time_from: "22:00", time_to: "05:00",
     labor_surcharge_rate: "0.25", machinery_surcharge_rate: "0.25", note: "",
@@ -168,6 +169,17 @@ export default function PortPage() {
     }
   };
 
+  const runValidation = async () => {
+    setNotice(null);
+    try {
+      const res = await fetch("/api/port-models/validate-coefficients");
+      const body = (await res.json()) as { data: { validation: { ok: boolean; issues: string[] } } };
+      setValidation(body.data.validation);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "照合検証に失敗しました");
+    }
+  };
+
   const selected = workTypes.find((t) => t.id === workTypeId);
   const seaAreaList = seaConditions.filter((s) => s.sea_area_code === seaArea);
   const inputCls = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
@@ -196,6 +208,13 @@ export default function PortPage() {
                 ))}
               </div>
               <div className="mt-2 text-xs text-gray-600">{readiness.note}</div>
+              <button onClick={() => void runValidation()} className="mt-2 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">係数データを照合検証</button>
+              {validation && (
+                <div className={`mt-2 rounded p-2 text-xs ${validation.ok ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>
+                  {validation.ok ? "照合OK：問題はありません。" : `問題 ${validation.issues.length}件`}
+                  {validation.issues.map((i, idx) => <div key={idx}>• {i}</div>)}
+                </div>
+              )}
             </div>
           )}
           <div className="grid gap-4 lg:grid-cols-3">

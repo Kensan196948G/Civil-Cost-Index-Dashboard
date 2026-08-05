@@ -29,26 +29,30 @@ function normalizeName(s: string): string {
 }
 
 function matchTree(
-  trees: Array<{ id: string; code: string; name: string; unit: string | null }>,
+  trees: Array<{ id: string; code: string; name: string; unit: string | null; level: number }>,
   row: CsvRow
 ): { tree: (typeof trees)[number] | null; method: "exact" | "fuzzy" | "none"; reason: string } {
   const rawName = String(row.item_name ?? row.品目 ?? row.細別 ?? "").trim();
   const rawCode = String(row.tree_code ?? row.工種コード ?? row.細別コード ?? "").trim();
   const norm = normalizeName(rawName);
   if (rawCode) {
-    const exact = trees.find((t) => t.code.toLowerCase() === rawCode.toLowerCase());
+    const exact = deepest(trees.filter((t) => t.code.toLowerCase() === rawCode.toLowerCase()));
     if (exact) return { tree: exact, method: "exact", reason: `コード一致: ${rawCode}` };
   }
   if (norm) {
-    const exactName = trees.find((t) => normalizeName(t.name) === norm);
+    const exactName = deepest(trees.filter((t) => normalizeName(t.name) === norm));
     if (exactName) return { tree: exactName, method: "exact", reason: `名称一致: ${rawName}` };
-    const fuzzy = trees.find((t) => {
+    const fuzzy = deepest(trees.filter((t) => {
       const tn = normalizeName(t.name);
       return tn.length >= 2 && (norm.includes(tn) || tn.includes(norm));
-    });
+    }));
     if (fuzzy) return { tree: fuzzy, method: "fuzzy", reason: `類似名称: ${rawName} → ${fuzzy.name}` };
   }
   return { tree: null, method: "none", reason: "マスタに一致なし（AI判定へ）" };
+}
+
+function deepest<T extends { level: number }>(list: T[]): T | null {
+  return list.length === 0 ? null : list.reduce((a, b) => (b.level > a.level ? b : a));
 }
 
 export async function extractQuantityCandidates(
@@ -76,7 +80,7 @@ export async function extractQuantityCandidates(
     const rawItem = String(row.item_name ?? row.品目 ?? row.細別 ?? "").trim();
     const quantityRaw = String(row.quantity ?? row.数量 ?? "");
     const quantity = Number(quantityRaw) || null;
-    const matched = matchTree(trees as Array<{ id: string; code: string; name: string; unit: string | null }>, row);
+    const matched = matchTree(trees as Array<{ id: string; code: string; name: string; unit: string | null; level: number }>, row);
     if (!matched.tree) {
       unmatched.push({ index: i, raw_item: rawItem });
       candidates.push({

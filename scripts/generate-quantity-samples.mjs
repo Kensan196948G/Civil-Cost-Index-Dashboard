@@ -17,7 +17,7 @@ const rows = [
   { expected_tree_code: "PAVEMENT_ASPHALT", item_name: "アスファルト舗装（切削オーバーレイ）", quantity: 1500, unit: "m2", condition_json: '{"method":"overlay"}' },
   { expected_tree_code: "SOIL_EXCAVATION", item_name: "床掘り", quantity: 300, unit: "m3", condition_json: "{}" },
   { expected_tree_code: "CONCRETE_PLACING", item_name: "コンクリート", quantity: 60, unit: "m3", condition_json: "{}" },
-  { expected_tree_code: "PAVEMENT_ASPHALT", item_name: "舗装工", quantity: 900, unit: "m2", condition_json: "{}" },
+  { expected_tree_code: "PAVEMENT", item_name: "舗装工", quantity: 900, unit: "m2", condition_json: "{}" },
   { expected_tree_code: "SOIL_EXCAVATION", item_name: "掘削", quantity: 250, unit: "m3", condition_json: "{}" },
 ];
 

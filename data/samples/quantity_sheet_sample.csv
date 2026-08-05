@@ -7,5 +7,5 @@ tree_code,item_name,quantity,unit,condition_json,expected_tree_code
 6,アスファルト舗装（切削オーバーレイ）,1500,m2,{"method":"overlay"},PAVEMENT_ASPHALT
 7,床掘り,300,m3,{},SOIL_EXCAVATION
 8,コンクリート,60,m3,{},CONCRETE_PLACING
-9,舗装工,900,m2,{},PAVEMENT_ASPHALT
+9,舗装工,900,m2,{},PAVEMENT
 10,掘削,250,m3,{},SOIL_EXCAVATION

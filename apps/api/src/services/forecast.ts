@@ -109,7 +109,19 @@ export async function generateForecast(
     VALUES
       ('forecast_scenario', 'item', ${item_id},
        ${JSON.stringify({ stats, scenarios, narrative })},
-       ${`予測は参考シナリオです。確定値ではありません。`}, ${provider}, ${model}, ${identity.email})
+      ${`予測は参考シナリオです。確定値ではありません。`}, ${provider}, ${model}, ${identity.email})
+  `;
+  const statusScenario = scenarios.find((s) => s.name === "現状維持");
+  const forecastValue = statusScenario ? (statusScenario.lower + statusScenario.upper) / 2 : latest;
+  await sql`
+    INSERT INTO forecast_evaluations
+      (item_id, item_name, forecast_date, horizon_months, forecast_value,
+       forecast_lower, forecast_upper, sample_months, status)
+    VALUES
+      (${item_id}, ${stats.item_name}, ${new Date().toISOString().slice(0, 10)}::date,
+       ${horizon_months}, ${forecastValue},
+       ${statusScenario?.lower ?? null}, ${statusScenario?.upper ?? null},
+       ${stats.sample_months}, 'pending')
   `;
   return {
     provider,
@@ -120,4 +132,74 @@ export async function generateForecast(
     warnings,
     disclaimer: "本予測は参考シナリオであり、確定予測ではありません。計算はコード、AIは説明のみを担当します。",
   };
+}
+
+export async function evaluateForecast(
+  sql: Sql,
+  input: { item_id: string; actual_value: number; actual_period: string }
+): Promise<{
+  id: string;
+  forecast_value: number;
+  actual_value: number;
+  error_rate: number | null;
+  horizon_months: number;
+  forecast_date: string;
+} | null> {
+  const rows = (await sql`
+    SELECT id, forecast_value, horizon_months FROM forecast_evaluations
+    WHERE item_id = ${input.item_id} AND status = 'pending'
+    ORDER BY forecast_date DESC, created_at DESC
+    LIMIT 1
+  `) as Array<Record<string, unknown>>;
+  if (rows.length === 0) return null;
+  const evalRow = rows[0];
+  const forecast = Number(evalRow.forecast_value);
+  const errorRate = forecast !== 0 ? (input.actual_value - forecast) / forecast : null;
+  const [row] = (await sql`
+    UPDATE forecast_evaluations SET
+      actual_value = ${input.actual_value},
+      actual_period = ${input.actual_period},
+      error_rate = ${errorRate},
+      status = 'evaluated'
+    WHERE id = ${evalRow.id}
+    RETURNING id, forecast_value, actual_value, error_rate, horizon_months, forecast_date
+  `) as Array<Record<string, unknown>>;
+  return {
+    id: String(row.id),
+    forecast_value: Number(row.forecast_value),
+    actual_value: Number(row.actual_value),
+    error_rate: row.error_rate != null ? Number(row.error_rate) : null,
+    horizon_months: Number(row.horizon_months),
+    forecast_date: String(row.forecast_date),
+  };
+}
+
+export async function listForecastEvaluations(sql: Sql, itemId?: string) {
+  const rows = (itemId
+    ? await sql`
+        SELECT id, item_id, item_name, forecast_date, horizon_months,
+               forecast_value, forecast_lower, forecast_upper, actual_value,
+               actual_period, error_rate, sample_months, status,
+               to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS created_at
+        FROM forecast_evaluations
+        WHERE item_id = ${itemId}
+        ORDER BY forecast_date DESC, created_at DESC
+      `
+    : await sql`
+        SELECT id, item_id, item_name, forecast_date, horizon_months,
+               forecast_value, forecast_lower, forecast_upper, actual_value,
+               actual_period, error_rate, sample_months, status,
+               to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS created_at
+        FROM forecast_evaluations
+        ORDER BY forecast_date DESC, created_at DESC
+      `) as Array<Record<string, unknown>>;
+  return rows.map((r) => ({
+    ...r,
+    forecast_value: Number(r.forecast_value),
+    forecast_lower: r.forecast_lower != null ? Number(r.forecast_lower) : null,
+    forecast_upper: r.forecast_upper != null ? Number(r.forecast_upper) : null,
+    actual_value: r.actual_value != null ? Number(r.actual_value) : null,
+    error_rate: r.error_rate != null ? Number(r.error_rate) : null,
+    sample_months: r.sample_months != null ? Number(r.sample_months) : null,
+  }));
 }

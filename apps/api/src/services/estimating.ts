@@ -161,6 +161,26 @@ export type EstimateDetail = {
   materials: EstimateMaterialRow[];
 };
 
+export type EstimateListRow = {
+  id: string;
+  project_id: string;
+  project_name: string;
+  base_id: string;
+  base_code: string;
+  base_name: string;
+  name: string;
+  status: string;
+  direct_cost: number;
+  common_temp_cost: number;
+  site_management_cost: number;
+  general_management_cost: number;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  created_by: string;
+  created_at: string;
+};
+
 // ---- 積算基準 ----
 
 export async function listEstimationBases(sql: Sql) {
@@ -818,8 +838,8 @@ export async function calculateEstimate(
   return estimate;
 }
 
-export async function listEstimates(sql: Sql, projectId?: string) {
-  const rows = projectId
+export async function listEstimates(sql: Sql, projectId?: string): Promise<EstimateListRow[]> {
+  const rows = (projectId
     ? await sql`
         SELECT e.id, e.project_id, p.name AS project_name, e.base_id, b.base_code, b.base_name,
                e.name, e.status, e.direct_cost, e.common_temp_cost, e.site_management_cost,
@@ -840,7 +860,7 @@ export async function listEstimates(sql: Sql, projectId?: string) {
         JOIN projects p ON p.id = e.project_id
         JOIN estimation_bases b ON b.id = e.base_id
         ORDER BY e.created_at DESC
-      `;
+      `) as DbRow[];
   return rows.map((r) => ({
     ...r,
     direct_cost: Number(r.direct_cost),
@@ -850,7 +870,7 @@ export async function listEstimates(sql: Sql, projectId?: string) {
     subtotal: Number(r.subtotal),
     tax_amount: Number(r.tax_amount),
     total: Number(r.total),
-  }));
+  })) as EstimateListRow[];
 }
 
 export async function getEstimate(sql: Sql, id: string): Promise<EstimateDetail | null> {

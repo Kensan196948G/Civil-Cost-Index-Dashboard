@@ -8,6 +8,8 @@ import {
   type QuoteComparisonRow,
   type QuoteItemInput,
 } from "../lib/quotations";
+import { generateAiText } from "../lib/ai";
+import type { Env } from "../types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB driver boundary
 type DbRow = Record<string, any>;
@@ -312,4 +314,55 @@ export async function buildQuotationXlsx(sql: Sql, id: string): Promise<ArrayBuf
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(comparison), "見積比較");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(items), "明細");
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx", compression: true }) as ArrayBuffer;
+}
+
+export async function reviewQuotation(
+  sql: Sql,
+  env: Env,
+  id: string,
+  identity: Identity
+) {
+  const quotation = await getQuotation(sql, id);
+  if (!quotation) return null;
+  const comparisonText = quotation.comparison
+    .map((c) => `${c.item_name}（${c.supplier_name}）: ${c.unit_price}円 / 平均 ${c.average} / 平均比 ${c.deviation_rate}% / 前回比 ${c.previous_change_rate}% / 警告: ${c.warnings.join("／") || "なし"}`)
+    .join("\n");
+  let provider = "rule";
+  let model: string | null = null;
+  let parsed: { summary?: string; comments?: string[]; recommendations?: string[] } | null = null;
+  try {
+    const res = await generateAiText(env, {
+      system:
+        "あなたは建設見積の査定支援AIです。金額は作成せず、与えられた比較表に基づく査定コメントをJSONで返してください。",
+      prompt: JSON.stringify({
+        supplier: quotation.supplier_name,
+        status: quotation.status,
+        tax_inclusive: quotation.tax_inclusive,
+        freight_included: quotation.freight_included,
+        comparison: comparisonText,
+        output_format: '{"summary":"...","comments":["..."],"recommendations":["..."]}',
+      }),
+    });
+    if (res) {
+      provider = res.provider;
+      model = res.model;
+      parsed = JSON.parse(res.text) as { summary?: string; comments?: string[]; recommendations?: string[] };
+    }
+  } catch (e) {
+    console.warn("quotation_review_fallback", e);
+  }
+  const review = {
+    summary: parsed?.summary ?? `見積 ${quotation.supplier_name} の査定コメントを生成しました（ルール生成）。`,
+    comments: parsed?.comments ?? quotation.comparison.filter((c) => c.warnings.length > 0).map((c) => `${c.item_name}: ${c.warnings.join("／")}`),
+    recommendations: parsed?.recommendations ?? [],
+  };
+  await sql`
+    INSERT INTO ai_suggestions
+      (suggestion_type, target_type, target_id, content, rationale, provider, model, created_by)
+    VALUES
+      ('quotation_review', 'quotation', ${id},
+       ${JSON.stringify(review)},
+       ${`見積比較 ${quotation.comparison.length}行から査定コメント生成`}, ${provider}, ${model}, ${identity.email})
+  `;
+  return { provider, model, review };
 }

@@ -5,7 +5,7 @@ import AiSummaryCard from "@/components/AiSummaryCard";
 import { ErrorMessage } from "@/components/Status";
 import { api } from "@/lib/api";
 import { downloadBlob, formatNumber, formatPeriod, formatRate } from "@/lib/utils";
-import type { AiAlertsResponse, AiReportResponse, AiStatus, AiTemplate, ForecastResult, Item } from "@/types/api";
+import type { AiAlertsResponse, AiReportResponse, AiStatus, AiTemplate, ForecastEvaluation, ForecastResult, Item, RagAnswerResult } from "@/types/api";
 
 const REPORT_TYPES = [
   { value: "monthly", label: "月次市況レポート" },
@@ -27,6 +27,11 @@ export default function AiNavPage() {
   const [forecastItem, setForecastItem] = useState("");
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
+  const [ragQuery, setRagQuery] = useState("");
+  const [ragResult, setRagResult] = useState<RagAnswerResult | null>(null);
+  const [ragLoading, setRagLoading] = useState(false);
+  const [evalForm, setEvalForm] = useState({ actual_value: "", actual_period: "2026-07" });
+  const [evaluations, setEvaluations] = useState<ForecastEvaluation[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -60,6 +65,35 @@ export default function AiNavPage() {
       setError(e instanceof Error ? e.message : "予測に失敗しました");
     } finally {
       setForecastLoading(false);
+    }
+  };
+
+  const runRag = async () => {
+    setRagLoading(true);
+    setRagResult(null);
+    try {
+      const res = await api.ragAsk(ragQuery, 6);
+      setRagResult(res.result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "RAG検索に失敗しました");
+    } finally {
+      setRagLoading(false);
+    }
+  };
+
+  const loadEvaluations = async () => {
+    if (!forecastItem) return;
+    const res = await api.forecastEvaluations(forecastItem);
+    setEvaluations(res.evaluations);
+  };
+
+  const evaluate = async () => {
+    try {
+      const res = await api.forecastEvaluate({ item_id: forecastItem, actual_value: Number(evalForm.actual_value), actual_period: evalForm.actual_period });
+      setEvaluations((prev) => [res.evaluation, ...prev]);
+      setEvalForm({ ...evalForm, actual_value: "" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "実績記録に失敗しました");
     }
   };
 
@@ -256,6 +290,63 @@ export default function AiNavPage() {
             {forecast.warnings.map((w, i) => <div key={i} className="mt-1 text-xs text-amber-700">{w}</div>)}
             <div className="mt-2 text-[11px] text-gray-400">{forecast.disclaimer}</div>
           </div>
+        )}
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-base font-semibold">RAG・自然言語検索（積算基準・歩掛・過去案件）</h2>
+          <button onClick={() => void api.ragIndex().then(() => setError(null)).catch((e) => setError(e.message))} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">
+            索引を再構築
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            placeholder="例: 掘削工の労務・機械構成を教えてください"
+            value={ragQuery}
+            onChange={(e) => setRagQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void runRag(); }}
+          />
+          <button onClick={() => void runRag()} disabled={ragLoading || !ragQuery.trim()} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">
+            {ragLoading ? "検索中…" : "質問する"}
+          </button>
+        </div>
+        {ragResult && (
+          <div className="mt-3 text-sm">
+            <div className="mb-1 text-xs text-gray-500">生成元: {ragResult.provider}{ragResult.model ? ` / ${ragResult.model}` : ""}</div>
+            <div className="whitespace-pre-wrap rounded bg-gray-50 p-3 text-xs leading-relaxed">{ragResult.answer}</div>
+            <div className="mt-2 text-xs text-gray-500">根拠資料:</div>
+            <ul className="mt-1 list-inside list-disc text-xs text-gray-600">
+              {ragResult.sources.map((s, i) => <li key={i}>{s.title}（類似度 {(s.similarity * 100).toFixed(1)}%）</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-base font-semibold">予測の実績誤差評価</h2>
+          <button onClick={() => void loadEvaluations()} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">履歴を表示</button>
+        </div>
+        <div className="flex items-center gap-2">
+          <input className="w-28 rounded border border-gray-300 px-2 py-1 text-sm" type="number" placeholder="実績値" value={evalForm.actual_value} onChange={(e) => setEvalForm({ ...evalForm, actual_value: e.target.value })} />
+          <input className="w-24 rounded border border-gray-300 px-2 py-1 text-sm" value={evalForm.actual_period} onChange={(e) => setEvalForm({ ...evalForm, actual_period: e.target.value })} />
+          <button onClick={() => void evaluate()} disabled={!evalForm.actual_value} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50">実績を記録</button>
+        </div>
+        {evaluations.length > 0 && (
+          <table className="mt-2 w-full text-xs">
+            <thead><tr className="border-b text-left text-gray-500"><th className="py-1">予測日</th><th>予測値</th><th>実績値</th><th>誤差率</th><th>状態</th></tr></thead>
+            <tbody>
+              {evaluations.map((e) => (
+                <tr key={e.id} className="border-b border-gray-100">
+                  <td className="py-1">{e.forecast_date}</td>
+                  <td className="py-1 text-right">{e.forecast_value}</td>
+                  <td className="py-1 text-right">{e.actual_value ?? "—"}</td>
+                  <td className="py-1 text-right">{e.error_rate != null ? `${(e.error_rate * 100).toFixed(1)}%` : "—"}</td>
+                  <td className="py-1">{e.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

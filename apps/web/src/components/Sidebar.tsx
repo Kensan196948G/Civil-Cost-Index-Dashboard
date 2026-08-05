@@ -36,6 +36,7 @@ const MENU = [
   { group: "システム", items: [
     { href: "/admin/users", label: "ユーザー管理", icon: "☺" },
     { href: "/admin/audit", label: "操作監査", icon: "✎" },
+    { href: "/admin/management", label: "経営KPI", icon: "◫" },
     { href: "/settings", label: "ユーザー設定", icon: "⚙" },
   ]},
 ];

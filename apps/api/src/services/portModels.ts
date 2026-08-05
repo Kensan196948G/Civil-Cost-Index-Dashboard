@@ -481,3 +481,38 @@ export async function resolveShiftRules(sql: Sql, codes: string[]) {
     shift_machinery_surcharge: machinery,
   };
 }
+
+export async function portReadiness(sql: Sql) {
+  const count = async (table: string) => {
+    const rows = await sql(`SELECT count(*)::int AS c FROM ${table}`);
+    return rows[0].c as number;
+  };
+  const [vessels, trees, breakdowns, seaMonths, rates, soil, transport, spoil] = await Promise.all([
+    count("vessels"),
+    count("work_type_trees"),
+    count("work_breakdowns"),
+    count("port_sea_conditions"),
+    count("overhead_rates"),
+    count("soil_types"),
+    count("dredging_transport_rates"),
+    count("spoil_grounds"),
+  ]);
+  const items = [
+    { key: "vessels", label: "作業船マスタ", current: vessels, required: 5 },
+    { key: "trees", label: "工種体系（港湾）", current: trees, required: 3 },
+    { key: "breakdowns", label: "歩掛（港湾）", current: breakdowns, required: 3 },
+    { key: "sea_months", label: "海象条件（海域×月）", current: seaMonths, required: 12 },
+    { key: "overhead_rates", label: "港湾諸経費率", current: rates, required: 3 },
+    { key: "soil_types", label: "土質マスタ", current: soil, required: 1 },
+    { key: "transport_rates", label: "運搬距離係数", current: transport, required: 1 },
+    { key: "spoil_grounds", label: "土捨場・処分場", current: spoil, required: 1 },
+  ];
+  const ok = items.every((i) => i.current >= i.required);
+  return {
+    ready: ok,
+    checklist: items.map((i) => ({ ...i, ok: i.current >= i.required })),
+    note: ok
+      ? "港湾積算のPoC計算に必要なマスタが揃っています。正式な令和8年度係数データへの置き換えを継続してください。"
+      : "マスタが不足しています。3経路の取込で係数データを投入してください。",
+  };
+}

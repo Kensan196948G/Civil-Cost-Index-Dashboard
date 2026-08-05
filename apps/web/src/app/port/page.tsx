@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { formatNumber } from "@/lib/utils";
-import type { PortEstimate, PortWorkType, SeaCondition, ShiftRule, SoilType, SpoilGround, TransportRate, Vessel, WorkabilityResult } from "@/types/api";
+import type { PortEstimate, PortReadiness, PortWorkType, SeaCondition, ShiftRule, SoilType, SpoilGround, TransportRate, Vessel, WorkabilityResult } from "@/types/api";
 
 export default function PortPage() {
   const [workTypes, setWorkTypes] = useState<PortWorkType[]>([]);
@@ -22,6 +22,7 @@ export default function PortPage() {
     kind: "soil", code: "", name: "", factor: "1.0", distance: "10", price: "0", note: "",
   });
   const [shiftRules, setShiftRules] = useState<ShiftRule[]>([]);
+  const [readiness, setReadiness] = useState<PortReadiness | null>(null);
   const [shiftForm, setShiftForm] = useState({
     rule_code: "", rule_name: "", shift_type: "night", time_from: "22:00", time_to: "05:00",
     labor_surcharge_rate: "0.25", machinery_surcharge_rate: "0.25", note: "",
@@ -51,6 +52,8 @@ export default function PortPage() {
       setTransportRates(tr.transport_rates);
       setSpoilGrounds(sg.spoil_grounds);
       setShiftRules(sh.shift_rules);
+      const rd = await api.portReadiness();
+      setReadiness(rd.readiness);
       if (!workTypeId && w.work_types[0]) setWorkTypeId(w.work_types[0].id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "不明なエラー");
@@ -182,6 +185,19 @@ export default function PortPage() {
       {loading && <LoadingState />}
       {!loading && (
         <>
+          {readiness && (
+            <div className={`rounded-lg border p-4 shadow-sm ${readiness.ready ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
+              <h2 className="mb-2 text-base font-semibold">港湾積算の運用準備状況</h2>
+              <div className="flex flex-wrap gap-2">
+                {readiness.checklist.map((c) => (
+                  <span key={c.key} className={`rounded px-2 py-1 text-xs ${c.ok ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
+                    {c.label}: {c.current}/{c.required}{c.ok ? " ✓" : " ✗"}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-2 text-xs text-gray-600">{readiness.note}</div>
+            </div>
+          )}
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <h2 className="mb-2 text-base font-semibold">試算条件</h2>

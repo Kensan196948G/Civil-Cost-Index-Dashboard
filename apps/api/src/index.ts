@@ -181,7 +181,11 @@ import {
   constructionRecordSchema,
 } from "./services/constructionRecords";
 import { extractDrawingCandidates } from "./services/drawingAi";
-import { buildManagementPdf, buildManagementPptx } from "./services/managementReport";
+import { buildManagementPdf, buildManagementPptx, buildManagementReportData } from "./services/managementReport";
+import { reindexAll, searchChunks, askRag, ragAskSchema } from "./services/rag";
+import { evaluateForecast, listForecastEvaluations } from "./services/forecast";
+import { reviewQuotation } from "./services/quotations";
+import { portReadiness } from "./services/portModels";
 import { runScheduledJobs } from "./lib/scheduler";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
@@ -1854,6 +1858,19 @@ app.get("/api/quotations/:id/export", async (c) => {
   }
 });
 
+app.post("/api/ai/quotation-review/:id", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimator", "estimating_manager", "system_admin", "data_approver"]);
+  try {
+    const result = await reviewQuotation(sql, c.env, c.req.param("id"), identity);
+    if (!result) return fail(c, "NOT_FOUND", "見積が見つかりません。", 404);
+    await recordAudit(sql, identity, "quotation.ai_review", "quotation", c.req.param("id"), { provider: result.provider });
+    return ok(c, { review: result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
 // ---- 予測シナリオ / 施工実績 / 図面OCR / 経営レポート ----
 
 app.post("/api/ai/forecast", async (c) => {
@@ -1867,6 +1884,33 @@ app.post("/api/ai/forecast", async (c) => {
   } catch (e) {
     return handleError(c, e);
   }
+});
+
+app.post("/api/ai/forecast/evaluate", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimator", "estimating_manager", "system_admin"]);
+  const parsed = z
+    .object({
+      item_id: z.string().min(1),
+      actual_value: z.number().nonnegative(),
+      actual_period: z.string().regex(/^\d{4}-\d{2}$/),
+    })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const result = await evaluateForecast(sql, parsed.data);
+    if (!result) return fail(c, "NOT_FOUND", "評価待ちの予測がありません。", 404);
+    await recordAudit(sql, identity, "forecast.evaluate", "forecast_evaluation", String(result.id), { error_rate: result.error_rate });
+    return ok(c, { evaluation: result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/ai/forecast/evaluations", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { evaluations: await listForecastEvaluations(sql, c.req.query("item_id") ?? undefined) });
 });
 
 app.post("/api/construction-records/import", async (c) => {
@@ -2003,6 +2047,51 @@ app.get("/api/reports/management.pptx", async (c) => {
       "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "Content-Disposition": `attachment; filename="cci-management-${new Date().toISOString().slice(0, 10)}.pptx"`,
     });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/reports/management.json", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { data: await buildManagementReportData(sql) });
+});
+
+app.get("/api/port-models/readiness", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  return ok(c, { readiness: await portReadiness(sql) });
+});
+
+app.post("/api/rag/index", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimator", "estimating_manager", "system_admin", "data_ingester"]);
+  try {
+    const result = await reindexAll(sql, c.env, identity);
+    await recordAudit(sql, identity, "rag.index", "document_chunks", "", { inserted: result.inserted });
+    return ok(c, { result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/rag/search", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const parsed = ragAskSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  return ok(c, { chunks: await searchChunks(sql, c.env, parsed.data.query, { limit: parsed.data.limit ?? 8, source_types: parsed.data.source_types }) });
+});
+
+app.post("/api/rag/ask", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["viewer"]);
+  const parsed = ragAskSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues);
+  try {
+    const result = await askRag(sql, c.env, { ...parsed.data, identity });
+    return ok(c, { result });
   } catch (e) {
     return handleError(c, e);
   }

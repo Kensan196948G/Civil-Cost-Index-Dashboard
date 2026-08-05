@@ -974,6 +974,52 @@ export interface ConstructionSummaryRow {
   max_unit_price: string;
 }
 
+export interface RagChunk {
+  id: string;
+  source_type: string;
+  source_id: string | null;
+  title: string;
+  content: string;
+  similarity: number;
+}
+
+export interface RagAnswerResult {
+  provider: string;
+  model: string | null;
+  answer: string;
+  sources: Array<{ title: string; source_type: string; source_id: string | null; similarity: number }>;
+  chunks: Array<{ title: string; content: string }>;
+}
+
+export interface QuotationReviewResult {
+  provider: string;
+  model: string | null;
+  review: { summary: string; comments: string[]; recommendations: string[] };
+}
+
+export interface ForecastEvaluation {
+  id: string;
+  item_id: string;
+  item_name: string;
+  forecast_date: string;
+  horizon_months: number;
+  forecast_value: number;
+  forecast_lower: number | null;
+  forecast_upper: number | null;
+  actual_value: number | null;
+  actual_period: string | null;
+  error_rate: number | null;
+  sample_months: number | null;
+  status: string;
+  created_at: string;
+}
+
+export interface PortReadiness {
+  ready: boolean;
+  checklist: Array<{ key: string; label: string; current: number; required: number; ok: boolean }>;
+  note: string;
+}
+
 export interface FetchJob {
   id: string;
   data_source_id: string;

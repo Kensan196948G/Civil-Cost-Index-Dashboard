@@ -841,4 +841,77 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     }), env);
     expect(draw.status).toBe(501);
   }, 15000);
+
+  it("rag: index/search/ask", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const idx = await get("/api/rag/index", { method: "POST", headers: admin });
+    expect(idx.status).toBe(200);
+    expect(idx.body.data.result.inserted).toBeGreaterThan(0);
+    const search = await get("/api/rag/search", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ query: "掘削工の歩掛", limit: 5 }),
+    });
+    expect(search.status).toBe(200);
+    expect(search.body.data.chunks.length).toBeGreaterThan(0);
+    const ask = await get("/api/rag/ask", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ query: "掘削工の労務・機械構成を教えてください", limit: 5 }),
+    });
+    expect(ask.status).toBe(200);
+    expect(ask.body.data.result.sources.length).toBeGreaterThan(0);
+  }, 20000);
+
+  it("quotation AI review (rule fallback)", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const proj = await get("/api/projects", { method: "POST", headers: admin, body: JSON.stringify({ name: "スモーク 査定AI", work_type: "土工" }) });
+    const projectId = proj.body.data.project.id;
+    const itemRes = await get("/api/items?category=MATERIAL_PRICE");
+    const item = itemRes.body.data.items.find((i: { item_code: string }) => i.item_code === "STEEL_H");
+    const q = await get("/api/quotations", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, supplier_name: "査定対象社", quote_date: "2026-08-01" }),
+    });
+    const qId = q.body.data.quotation_id;
+    await get(`/api/quotations/${qId}/items`, {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ item_id: item.id, item_name: item.item_name, unit: "円/t", unit_price: 100000 }),
+    });
+    const review = await get(`/api/ai/quotation-review/${qId}`, { method: "POST", headers: admin });
+    expect(review.status).toBe(200);
+    expect(review.body.data.review.review.summary.length).toBeGreaterThan(0);
+    await get(`/api/quotations/${qId}`, { method: "DELETE", headers: admin });
+    await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+  }, 15000);
+
+  it("forecast evaluation and port readiness", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const itemsRes = await get("/api/items?category=PRICE_INDEX");
+    const indexItem = itemsRes.body.data.items.find((i: { item_code: string }) => i.item_code === "INDEX_CONSTRUCTION");
+    await get("/api/ai/forecast", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ item_id: indexItem.id, horizon_months: 3 }),
+    });
+    const evaled = await get("/api/ai/forecast/evaluate", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ item_id: indexItem.id, actual_value: 130, actual_period: "2026-07" }),
+    });
+    expect(evaled.status).toBe(200);
+    expect(evaled.body.data.evaluation.error_rate).not.toBeNull();
+    const list = await get(`/api/ai/forecast/evaluations?item_id=${indexItem.id}`);
+    expect(list.status).toBe(200);
+    expect(list.body.data.evaluations.some((e: { status: string }) => e.status === "evaluated")).toBe(true);
+    const readiness = await get("/api/port-models/readiness");
+    expect(readiness.status).toBe(200);
+    expect(readiness.body.data.readiness.ready).toBe(true);
+    const mgmt = await app!.fetch(new Request("http://localhost/api/reports/management.json"), env);
+    expect(mgmt.status).toBe(200);
+    const mgmtData = (await mgmt.json()) as { data: { data: { port_availability: number | null; project_profit_avg: number | null } } };
+    expect(mgmtData.data.data).toHaveProperty("port_availability");
+  }, 20000);
 });

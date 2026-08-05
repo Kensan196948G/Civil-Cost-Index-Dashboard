@@ -31,6 +31,7 @@ import type {
   Item,
   OperationAuditLog,
   PortEstimate,
+  PortReadiness,
   PortWorkType,
   QuantityInput,
   QuantityAiCandidate,
@@ -46,7 +47,11 @@ import type {
   ProjectItem,
   ProjectSummary,
   QuotationDetail,
+  QuotationReviewResult,
   QuotationSummary,
+  RagAnswerResult,
+  RagChunk,
+  ForecastEvaluation,
   Region,
   SimulationRequest,
   SimulationResult,
@@ -335,6 +340,21 @@ export const api = {
       body: fd,
     });
   },
+  ragIndex: () =>
+    request<{ result: { inserted: number; embedding: string } }>("/api/rag/index", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  ragSearch: (query: string, limit?: number) =>
+    request<{ chunks: RagChunk[] }>("/api/rag/search", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify({ query, limit }) }),
+  ragAsk: (query: string, limit?: number) =>
+    request<{ result: RagAnswerResult }>("/api/rag/ask", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify({ query, limit }) }),
+  quotationReview: (id: string) =>
+    request<{ review: QuotationReviewResult }>(`/api/ai/quotation-review/${id}`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  forecastEvaluate: (input: { item_id: string; actual_value: number; actual_period: string }) =>
+    request<{ evaluation: ForecastEvaluation }>("/api/ai/forecast/evaluate", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
+  forecastEvaluations: (itemId?: string) =>
+    request<{ evaluations: ForecastEvaluation[] }>(`/api/ai/forecast/evaluations${itemId ? `?item_id=${itemId}` : ""}`),
+  portReadiness: () => request<{ readiness: PortReadiness }>("/api/port-models/readiness"),
+  managementData: () =>
+    request<{ data: Record<string, unknown> }>("/api/reports/management.json"),
   quotations: (projectId?: string) =>
     request<{ quotations: QuotationSummary[] }>(`/api/quotations${projectId ? `?project_id=${projectId}` : ""}`),
   createQuotation: (input: {

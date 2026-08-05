@@ -109,6 +109,14 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | POST | `/api/ai/drawing-extract` | 図面OCRによる数量候補抽出（Vision対応: Anthropicのみ・候補は要承認） |
 | GET | `/api/reports/management.pdf` | 経営会議向け総括PDF |
 | GET | `/api/reports/management.pptx` | 経営会議向け総括PowerPoint |
+| GET | `/api/reports/management.json` | 経営KPIデータ（案件別粗利・港湾稼働率・採用単価対実績） |
+| GET | `/api/port-models/readiness` | 港湾積算の運用準備状況チェック |
+| POST | `/api/rag/index` | RAG索引の再構築（積算基準・歩掛・過去案件をpgvectorへ） |
+| POST | `/api/rag/search` | ベクトル類似検索 |
+| POST | `/api/rag/ask` | 根拠付きAI回答（引用番号付き・要監査ログ） |
+| POST | `/api/ai/quotation-review/{id}` | 見積比較からAI査定コメント生成（候補・要承認） |
+| POST | `/api/ai/forecast/evaluate` | 予測の実績値記録・誤差率算定 |
+| GET | `/api/ai/forecast/evaluations` | 予測実績誤差の履歴（データ充足度含む） |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

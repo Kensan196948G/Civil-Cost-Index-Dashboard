@@ -1,5 +1,18 @@
 # リリースノート
 
+## Unreleased（2026-08-05: RAG・AI査定・予測評価・運用準備・経営KPI）
+
+- RAG・自然言語検索（migration 017）
+  - `document_chunks`（pgvector 384次元・HNSW索引）に積算基準・歩掛・過去案件を索引化
+  - 埋め込み: Workers AI優先・オフライン時は決定論的ハッシュ埋め込みへフォールバック
+  - `POST /api/rag/ask` は根拠資料（引用番号・類似度）付きでAI回答（DeepSeek等）を生成し監査ログへ保存
+- AI見積査定コメント: `POST /api/ai/quotation-review/{id}`（DeepSeekで査定コメント・推奨を生成→ai_suggestionsで承認）
+- 予測の実績誤差評価: `forecast_evaluations`（予測値・実績値・誤差率・データ充足度）。`POST /api/ai/forecast/evaluate` で記録
+- 港湾積算の運用準備チェック: `GET /api/port-models/readiness`（船舶・工種・歩掛・海象・諸経費率・土質/運搬/土捨場の充足判定）
+- 経営KPI拡張: 案件別粗利（積算額−ベース額）・港湾稼働率平均・採用単価対実績中央値。PDF/PPTXにも反映、`management.json` と `/admin/management` 画面を追加
+- Web: /ai にRAG検索・予測実績評価、/admin/quotations にAI査定コメント、/port に準備状況、/admin/management にKPIを追加
+- テスト135件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: 図面OCRの本格評価基盤）
 
 - 合成図面PNG生成スクリプト（`apps/api/scripts/generate-synthetic-drawings.mjs`・依存ゼロ・ビットマップフォント）

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { loadPrefs, formatNumber, formatDateTime } from "@/lib/utils";
-import type { Item, ProjectSummary, QuotationDetail, QuotationSummary } from "@/types/api";
+import type { Item, ProjectSummary, QuotationDetail, QuotationReviewResult, QuotationSummary } from "@/types/api";
 
 export default function QuotationsPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -12,6 +12,7 @@ export default function QuotationsPage() {
   const [projectId, setProjectId] = useState("");
   const [quotations, setQuotations] = useState<QuotationSummary[]>([]);
   const [detail, setDetail] = useState<QuotationDetail | null>(null);
+  const [review, setReview] = useState<QuotationReviewResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -132,6 +133,18 @@ export default function QuotationsPage() {
     }
   };
 
+  const runReview = async () => {
+    setNotice(null);
+    if (!detail) return;
+    try {
+      const res = await api.quotationReview(detail.id);
+      setReview(res.review);
+      setNotice(`AI査定コメントを生成しました（生成元: ${res.review.provider}${res.review.model ? ` / ${res.review.model}` : ""}）。承認が必要です。`);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "査定コメント生成に失敗しました");
+    }
+  };
+
   const inputCls = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs font-semibold text-gray-600";
   const money = (v: number | null) => (v == null ? "—" : formatNumber(v));
@@ -193,9 +206,12 @@ export default function QuotationsPage() {
                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-base font-semibold">見積比較（{detail.supplier_name}）</h2>
-                    <a href={api.quotationExportUrl(detail.id)} download={`cci-quotation-${detail.id.slice(0, 8)}.xlsx`} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
-                      見積比較Excel出力
-                    </a>
+                    <div className="flex gap-2">
+                      <button onClick={() => void runReview()} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50">AI査定コメント</button>
+                      <a href={api.quotationExportUrl(detail.id)} download={`cci-quotation-${detail.id.slice(0, 8)}.xlsx`} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                        見積比較Excel出力
+                      </a>
+                    </div>
                   </div>
                   <table className="w-full text-xs">
                     <thead><tr className="border-b text-left text-gray-600"><th className="py-1">品目</th><th>業者</th><th>単価</th><th>平均</th><th>平均比</th><th>前回比</th><th>警告</th></tr></thead>
@@ -215,6 +231,16 @@ export default function QuotationsPage() {
                       ))}
                     </tbody>
                   </table>
+                  {review && (
+                    <div className="mt-3 rounded border border-blue-200 bg-blue-50 p-3 text-sm">
+                      <div className="mb-1 font-semibold text-blue-900">AI査定コメント（要確認・承認）</div>
+                      <div className="text-xs text-blue-800">{review.review.summary}</div>
+                      {review.review.comments.map((c, i) => <div key={i} className="mt-1 text-xs text-amber-700">• {c}</div>)}
+                      {review.review.recommendations.length > 0 && (
+                        <div className="mt-1 text-xs text-blue-800">推奨: {review.review.recommendations.join("／")}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                   <h2 className="mb-2 text-base font-semibold">この見積の明細</h2>

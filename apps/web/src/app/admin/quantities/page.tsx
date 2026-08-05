@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { loadPrefs, formatNumber } from "@/lib/utils";
-import type { EstimationBase, ProjectSummary, QuantityRow, WorkTypeTree } from "@/types/api";
+import type { EstimationBase, ProjectSummary, QuantityAiCandidate, QuantityRow, WorkTypeTree } from "@/types/api";
 
 export default function QuantitiesPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -20,6 +20,10 @@ export default function QuantitiesPage() {
   const [form, setForm] = useState({
     tree_id: "", quantity: "", unit: "", condition_json: "{}", item_name: "", standard_name: "", source_note: "",
   });
+  const [aiFile, setAiFile] = useState<File | null>(null);
+  const [aiCandidates, setAiCandidates] = useState<QuantityAiCandidate[]>([]);
+  const [aiProvider, setAiProvider] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -87,6 +91,43 @@ export default function QuantitiesPage() {
     }
   };
 
+  const doAiExtract = async () => {
+    setNotice(null);
+    if (!aiFile || !projectId || !baseId) return;
+    setAiBusy(true);
+    try {
+      const res = await api.aiExtractQuantities(aiFile, projectId, baseId);
+      setAiCandidates(res.result.candidates);
+      setAiProvider(`${res.result.provider}${res.result.model ? ` / ${res.result.model}` : ""}`);
+      setNotice(`AI数量候補を抽出しました（${res.result.candidates.length}件・生成元: ${aiProvider || res.result.provider}）。承認後に数量へ反映されます。`);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "抽出に失敗しました");
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const approveCandidate = async (c: QuantityAiCandidate) => {
+    if (!c.suggestion_id) return;
+    try {
+      await api.approveQuantitySuggestion(c.suggestion_id);
+      setAiCandidates((prev) => prev.filter((x) => x.suggestion_id !== c.suggestion_id));
+      await loadQuantities();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "承認に失敗しました");
+    }
+  };
+
+  const rejectCandidate = async (c: QuantityAiCandidate) => {
+    if (!c.suggestion_id) return;
+    try {
+      await api.rejectQuantitySuggestion(c.suggestion_id);
+      setAiCandidates((prev) => prev.filter((x) => x.suggestion_id !== c.suggestion_id));
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "却下に失敗しました");
+    }
+  };
+
   const inputCls = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs font-semibold text-gray-600";
 
@@ -144,6 +185,41 @@ export default function QuantitiesPage() {
               <input className={`${inputCls} md:col-span-2`} placeholder="出典・備考" value={form.source_note} onChange={(e) => setForm({ ...form, source_note: e.target.value })} />
             </div>
             <button onClick={() => void add()} className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">数量を追加</button>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-2 text-base font-semibold">AI数量取込（数量計算書Excel/CSV）</h2>
+            <p className="mb-2 text-xs text-gray-500">
+              工種体系へ「コード一致→名称一致→類似名称→AI対応付け」で候補を生成します。AIは候補と理由のみ提示し、金額は確定しません。
+            </p>
+            <div className="flex items-center gap-3">
+              <input type="file" accept=".csv,.xlsx" className="text-sm" onChange={(e) => setAiFile(e.target.files?.[0] ?? null)} />
+              <button onClick={() => void doAiExtract()} disabled={aiBusy || !aiFile || !projectId || !baseId} className="rounded-md bg-violet-600 px-4 py-2 text-sm text-white hover:bg-violet-700 disabled:opacity-50">
+                {aiBusy ? "抽出中…" : "AI候補を抽出"}
+              </button>
+              {aiProvider && <span className="text-xs text-gray-500">生成元: {aiProvider}</span>}
+            </div>
+            {aiCandidates.length > 0 && (
+              <table className="mt-3 w-full text-sm">
+                <thead><tr className="border-b text-left text-xs text-gray-600"><th className="py-1">行</th><th>入力品目</th><th>対応工種</th><th>数量</th><th>条件</th><th>手法</th><th>理由</th><th></th></tr></thead>
+                <tbody>
+                  {aiCandidates.map((c) => (
+                    <tr key={c.suggestion_id ?? c.row_number} className="border-b border-gray-100 align-top">
+                      <td className="py-1">{c.row_number}</td>
+                      <td className="py-1">{c.raw_item}</td>
+                      <td className="py-1">{c.tree_code ? `${c.tree_code} ${c.tree_name}` : <span className="text-red-600">未対応</span>}</td>
+                      <td className="py-1 text-right">{c.quantity ?? "—"} {c.unit ?? ""}</td>
+                      <td className="py-1 font-mono text-xs">{JSON.stringify(c.condition_json)}</td>
+                      <td className="py-1 text-xs">{c.match_method}</td>
+                      <td className="py-1 text-xs text-gray-500">{c.reason}</td>
+                      <td className="py-1 whitespace-nowrap text-xs">
+                        <button onClick={() => void approveCandidate(c)} disabled={!c.suggestion_id} className="mr-2 rounded border border-green-300 px-2 py-1 text-green-700 hover:bg-green-50">承認</button>
+                        <button onClick={() => void rejectCandidate(c)} disabled={!c.suggestion_id} className="rounded border border-red-300 px-2 py-1 text-red-700 hover:bg-red-50">却下</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </>
       )}

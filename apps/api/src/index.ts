@@ -162,6 +162,12 @@ import {
   quotationItemSchema,
   quotationItemPatchSchema,
 } from "./services/quotations";
+import {
+  extractQuantityCandidates,
+  listQuantitySuggestions,
+  approveQuantitySuggestion,
+  rejectQuantitySuggestion,
+} from "./services/quantityAi";
 import { runScheduledJobs } from "./lib/scheduler";
 
 const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
@@ -1444,6 +1450,72 @@ app.delete("/api/quantities/:id", async (c) => {
     if (!id) return fail(c, "NOT_FOUND", "数量が見つかりません。", 404);
     await recordAudit(sql, identity, "quantity.delete", "quantity", String(id));
     return ok(c, { deleted: true });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/quantities/ai-extract", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  const form = await c.req.formData().catch(() => null);
+  if (!form) return fail(c, "VALIDATION_ERROR", "multipart/form-data が必要です。", 400);
+  const file = form.get("file");
+  const projectId = String(form.get("project_id") ?? "");
+  const baseId = String(form.get("base_id") ?? "");
+  if (!(file instanceof File) || !projectId || !baseId) {
+    return fail(c, "VALIDATION_ERROR", "file / project_id / base_id が必要です。", 400);
+  }
+  try {
+    const buffer = await file.arrayBuffer();
+    const fileName = file.name.toLowerCase();
+    const rows = fileName.endsWith(".xlsx")
+      ? parseWorkbookRows(buffer)
+      : parseCsv(decodeBuffer(buffer));
+    const result = await extractQuantityCandidates(sql, c.env, { projectId, baseId, rows, identity });
+    await recordAudit(sql, identity, "quantity.ai_extract", "project", projectId, { candidates: result.candidates.length, provider: result.provider });
+    return ok(c, { result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.get("/api/quantities/ai-suggestions", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const status = c.req.query("status") ?? undefined;
+  if (status && !["pending", "approved", "rejected"].includes(status)) {
+    return fail(c, "VALIDATION_ERROR", "status は pending/approved/rejected のいずれかです。", 400);
+  }
+  return ok(c, {
+    suggestions: await listQuantitySuggestions(sql, {
+      projectId: c.req.query("project_id") ?? undefined,
+      status,
+    }),
+  });
+});
+
+app.post("/api/quantities/ai-suggestions/:id/approve", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const result = await approveQuantitySuggestion(sql, c.req.param("id"), identity);
+    if (!result) return fail(c, "NOT_FOUND", "AI候補が見つからないか、既に処理済みです。", 404);
+    await recordAudit(sql, identity, "quantity.ai_approve", "quantity", String(result.quantity_id), { suggestion_id: result.suggestion_id });
+    return ok(c, { result });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/quantities/ai-suggestions/:id/reject", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
+  try {
+    const id = await rejectQuantitySuggestion(sql, c.req.param("id"), identity);
+    if (!id) return fail(c, "NOT_FOUND", "AI候補が見つからないか、既に処理済みです。", 404);
+    await recordAudit(sql, identity, "quantity.ai_reject", "quantity_suggestion", String(id));
+    return ok(c, { rejected: true });
   } catch (e) {
     return handleError(c, e);
   }

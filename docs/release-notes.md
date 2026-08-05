@@ -1,5 +1,17 @@
 # リリースノート
 
+## Unreleased（2026-08-05: Phase 6 数量計算書ExcelのAI取込）
+
+- `POST /api/quantities/ai-extract`: 数量計算書CSV/Excelから工種体系へ「コード一致→名称一致→類似名称→AI対応付け」で候補を生成
+- 候補は `ai_suggestions`（`quantity_extraction`）に保存し、承認→`quantities`反映／却下→破棄（承認フロー）
+- AI（DeepSeek等）は候補と理由のみ生成し、数量・金額は確定しない
+- `GET /api/quantities/ai-suggestions`・承認/却下APIを追加
+- `/admin/quantities` に「AI数量取込」セクション（抽出・候補一覧・承認/却下）を追加
+- 評価基盤: `data/samples/quantity_sheet_sample.csv`（正解ラベル付き10行）、
+  `scripts/generate-quantity-samples.mjs`、`scripts/evaluate-ai-extraction.mjs`（細別一致率90%以上でPASS）、
+  `docs/quantity-ai-evaluation.md`
+- テスト128件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: 見積比較・査定支援）
 
 - migration `014_quotations.sql`: `quotations` / `quotation_items`（税込/運賃込・正規化条件・採用/採用理由）

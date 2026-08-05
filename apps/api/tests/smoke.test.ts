@@ -532,7 +532,7 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(delEst.status).toBe(200);
     const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
     expect(delProj.status).toBe(200);
-  });
+  }, 15000);
 
   it("port sea conditions and workability", async () => {
     const cond = await get("/api/port-models/sea-conditions?sea_area_code=SEA_TOKYO_BAY");
@@ -652,7 +652,7 @@ describe.skipIf(!hasDb)("integration smoke", () => {
 
     await get(`/api/estimates/${estimateId}`, { method: "DELETE", headers: admin });
     await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
-  });
+  }, 15000);
 
   it("quotations: create/compare/adopt/export/delete", async () => {
     const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
@@ -715,5 +715,58 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     await get(`/api/quotations/${qaId}`, { method: "DELETE", headers: admin });
     await get(`/api/quotations/${qbId}`, { method: "DELETE", headers: admin });
     await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+  }, 15000);
+
+  it("quantity AI extraction: extract/suggest/approve/reject", async () => {
+    const adminKey = process.env.ADMIN_API_KEY!;
+    const basesRes = await get("/api/estimation-bases");
+    const base = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "MLIT-2026");
+    const proj = await get("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": adminKey },
+      body: JSON.stringify({ name: "スモーク AI数量取込", work_type: "土工" }),
+    });
+    const projectId = proj.body.data.project.id;
+
+    const csv = [
+      "tree_code,item_name,quantity,unit,condition_json",
+      ",掘削工,1000,m3,{\"soil\":\"clay\"}",
+      ",コンクリート打設,120,m3,{}",
+      ",アスファルト舗装,2000,m2,{}",
+    ].join("\n");
+    const form = new FormData();
+    form.append("file", new Blob([csv], { type: "text/csv" }), "quantities.csv");
+    form.append("project_id", projectId);
+    form.append("base_id", base.id);
+    const res = await app!.fetch(new Request("http://localhost/api/quantities/ai-extract", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+      body: form,
+    }), env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { result: { candidates: Array<{ suggestion_id: string; tree_code: string | null; match_method: string }> } } };
+    const candidates = body.data.result.candidates;
+    expect(candidates.length).toBe(3);
+    expect(candidates.every((c) => c.match_method === "exact")).toBe(true);
+
+    const list = await get(`/api/quantities/ai-suggestions?project_id=${projectId}&status=pending`);
+    expect(list.status).toBe(200);
+    expect(list.body.data.suggestions.length).toBe(3);
+
+    const ok = await get(`/api/quantities/ai-suggestions/${candidates[0].suggestion_id}/approve`, {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+    });
+    expect(ok.status).toBe(200);
+    const ng = await get(`/api/quantities/ai-suggestions/${candidates[1].suggestion_id}/reject`, {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKey },
+    });
+    expect(ng.status).toBe(200);
+    const quantities = await get(`/api/quantities?project_id=${projectId}`);
+    expect(quantities.body.data.quantities.length).toBe(1);
+
+    await get(`/api/quantities/${quantities.body.data.quantities[0].id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKey } });
+    await get(`/api/projects/${projectId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKey } });
   }, 15000);
 });

@@ -30,6 +30,8 @@ import type {
   PortEstimate,
   PortWorkType,
   QuantityInput,
+  QuantityAiCandidate,
+  QuantityAiSuggestion,
   QuantityRow,
   PriceSnapshot,
   PriceVersion,
@@ -226,6 +228,23 @@ export const api = {
     request<{ quantity_id: string }>(`/api/quantities/${id}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   deleteQuantity: (id: string) =>
     request<{ deleted: boolean }>(`/api/quantities/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  aiExtractQuantities: (file: File, projectId: string, baseId: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("project_id", projectId);
+    fd.append("base_id", baseId);
+    return request<{ result: { provider: string; model: string | null; candidates: QuantityAiCandidate[]; suggestion_ids: string[] } }>("/api/quantities/ai-extract", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: fd,
+    });
+  },
+  quantityAiSuggestions: (projectId: string, status?: string) =>
+    request<{ suggestions: QuantityAiSuggestion[] }>(`/api/quantities/ai-suggestions?project_id=${projectId}${status ? `&status=${status}` : ""}`),
+  approveQuantitySuggestion: (id: string) =>
+    request<{ result: { quantity_id: string; suggestion_id: string } }>(`/api/quantities/ai-suggestions/${id}/approve`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  rejectQuantitySuggestion: (id: string) =>
+    request<{ rejected: boolean }>(`/api/quantities/ai-suggestions/${id}/reject`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
   calculateEstimate: (input: {
     project_id: string;
     base_id: string;

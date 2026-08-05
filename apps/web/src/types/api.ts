@@ -595,6 +595,44 @@ export interface QuantityInput {
   source_note?: string | null;
 }
 
+export interface QuantityAiCandidate {
+  suggestion_id: string | null;
+  row_number: number;
+  raw_item: string;
+  tree_id: string | null;
+  tree_code: string | null;
+  tree_name: string | null;
+  quantity: number | null;
+  unit: string | null;
+  condition_json: Record<string, unknown>;
+  match_method: "exact" | "fuzzy" | "ai" | "none";
+  score: number;
+  reason: string;
+}
+
+export interface QuantityAiSuggestion {
+  id: string;
+  target_id: string;
+  content: {
+    row_number: number;
+    raw_item: string;
+    tree_id: string | null;
+    tree_code: string | null;
+    tree_name: string | null;
+    quantity: number | null;
+    unit: string | null;
+    condition_json: Record<string, unknown>;
+    match_method: string;
+    score: number;
+  };
+  rationale: string;
+  provider: string;
+  model: string | null;
+  status: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface EstimateSummary {
   id: string;
   project_id: string;

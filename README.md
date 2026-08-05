@@ -310,6 +310,7 @@ cd apps/web && wrangler deploy          # Web 静的アセット Worker
 | [外部評価の検証結果と対応方針（2026-08-04）](docs/evaluation-response-2026-08-04.md) | 評価の裏取り・実施済み対応・今後のロードマップ |
 | [正式な土木建設専用積算システム拡張仕様書](docs/estimating-system-spec.md) | 積算エンジン・歩掛・諸経費・港湾対応・AI候補生成の全体仕様（構想） |
 | [積算係数データ投入手順（3経路）](docs/coefficient-import.md) | 国交省電子化／書籍／既存システムからの正式係数データ投入 |
+| [数量計算書AI取込の評価手順](docs/quantity-ai-evaluation.md) | AI候補抽出の精度評価と図面OCRのサンプル整備方針 |
 
 ## 🔒 セキュリティ
 

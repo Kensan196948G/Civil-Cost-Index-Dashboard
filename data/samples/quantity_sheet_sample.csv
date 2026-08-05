@@ -1,0 +1,11 @@
+tree_code,item_name,quantity,unit,condition_json,expected_tree_code
+1,掘削工,1000,m3,{"soil":"clay"},SOIL_EXCAVATION
+2,掘削（土砂）,500,m3,{"soil":"sand"},SOIL_EXCAVATION
+3,コンクリート打設,120,m3,{},CONCRETE_PLACING
+4,コンクリート打設 18-8-25,80,m3,{"spec":"18-8-25"},CONCRETE_PLACING
+5,アスファルト舗装,2000,m2,{},PAVEMENT_ASPHALT
+6,アスファルト舗装（切削オーバーレイ）,1500,m2,{"method":"overlay"},PAVEMENT_ASPHALT
+7,床掘り,300,m3,{},SOIL_EXCAVATION
+8,コンクリート,60,m3,{},CONCRETE_PLACING
+9,舗装工,900,m2,{},PAVEMENT_ASPHALT
+10,掘削,250,m3,{},SOIL_EXCAVATION

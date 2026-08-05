@@ -93,6 +93,10 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | PATCH | `/api/quotations/{id}/items/{itemId}` | 見積明細更新（採用・採用理由・単価） |
 | DELETE | `/api/quotations/{id}/items/{itemId}` | 見積明細削除 |
 | GET | `/api/quotations/{id}/export` | 見積比較Excel（見積比較／明細） |
+| POST | `/api/quantities/ai-extract` | 数量計算書CSV/ExcelのAI候補抽出（工種対応付け・承認フロー） |
+| GET | `/api/quantities/ai-suggestions` | AI数量候補一覧（`project_id` / `status` 任意） |
+| POST | `/api/quantities/ai-suggestions/{id}/approve` | AI数量候補の承認（quantitiesへ反映） |
+| POST | `/api/quantities/ai-suggestions/{id}/reject` | AI数量候補の却下 |
 | GET | `/api/auth/me` | 現在の認証情報（メール・役割・認証元） |
 | GET | `/api/users` | ユーザー一覧（system_admin） |
 | POST | `/api/users` | ユーザー作成（system_admin） |

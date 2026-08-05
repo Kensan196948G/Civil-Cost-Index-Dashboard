@@ -42,7 +42,7 @@ AI抽出: deepseek / deepseek-chat
 
 受入基準: **細別一致率90%以上、数量誤差±5%以内**（数量誤差は承認後の積算結果照合で確認）。
 
-## 3. 図面OCR（次段階・サンプル整備中）
+## 3. 図面OCR（合成サンプルによる精度評価）
 
 `POST /api/ai/drawing-extract` を実装済み（PNG/JPEG/WebP・Anthropic Vision）。
 抽出候補は `quantity_extraction` として保存され、既存の承認フローで `quantities` へ反映できます。
@@ -62,9 +62,30 @@ AI抽出: deepseek / deepseek-chat
 
 ### 合成図面サンプル
 
-`apps/api/scripts/generate-synthetic-drawings.mjs`（未作成の場合は本書の手順に従い自前で作成）:
-- 寸法・数量が既知（=正解ラベル）の簡単な平面図・断面図をPDFで生成
-- 正解ラベルCSV（tree_code, quantity）を併せて出力し、AI抽出の一致率・数量誤差率を評価
+`apps/api/scripts/generate-synthetic-drawings.mjs`（依存ゼロ・ビットマップフォント）:
+- 寸法（W/D/H）と数量（VOL）が既知の平面図・断面図をPNGで生成（`data/samples/drawings/`）
+- 正解ラベルCSV（tree_code, expected_quantity, unit）を併せて出力
+
+```bash
+cd apps/api
+node scripts/generate-synthetic-drawings.mjs 10
+```
+
+### 精度評価
+
+前提: 稼働中のAPI・`AI_PROVIDER=anthropic`（Vision対応）。
+
+```bash
+cd apps/api
+ADMIN_API_KEY=... node scripts/evaluate-drawing-ocr.mjs \
+  --project-id <案件ID> --base-id <基準ID> --api http://127.0.0.1:18000
+```
+
+評価指標:
+- 細別一致率 = 期待 tree_code と抽出 tree_code が一致した割合
+- 数量誤差率 = |抽出数量 − 期待数量| ÷ 期待数量 × 100（中央値）
+
+受入基準: **細別一致率90%以上・数量誤差中央値±5%以内**でPASS。
 
 ## 4. 注意
 

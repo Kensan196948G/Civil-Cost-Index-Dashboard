@@ -1,5 +1,14 @@
 # リリースノート
 
+## Unreleased（2026-08-05: 図面OCRの本格評価基盤）
+
+- 合成図面PNG生成スクリプト（`apps/api/scripts/generate-synthetic-drawings.mjs`・依存ゼロ・ビットマップフォント）
+  - 寸法（W/D/H）と数量（VOL）が既知の平面図・断面図を10件生成し、正解ラベルCSVを出力
+- 精度評価スクリプト（`apps/api/scripts/evaluate-drawing-ocr.mjs`）
+  - `/api/ai/drawing-extract`（Anthropic Vision）で数量候補を抽出し、細別一致率・数量誤差中央値を判定
+  - 受入基準: 細別一致率90%以上・数量誤差±5%以内
+- `data/samples/drawings/` に合成サンプル10件を追加
+
 ## Unreleased（2026-08-05: 基準差分・予測・施工実績・図面OCR・経営レポート）
 
 - 積算基準の新旧差分（`/api/estimation-bases/{id}/compare`）と基準年度の自動適用判定（`apply-check`）

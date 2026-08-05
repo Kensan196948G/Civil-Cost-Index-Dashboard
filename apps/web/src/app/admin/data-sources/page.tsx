@@ -7,7 +7,9 @@ import { formatDateTime } from "@/lib/utils";
 import type { DataSource, DataSourceInput } from "@/types/api";
 
 const EMPTY: DataSourceInput = {
-  source_code: "", source_name: "", source_type: "material", provider_name: "", source_url: "", file_format: "csv", update_frequency: "monthly", license_note: "",
+  source_code: "", source_name: "", source_type: "material", provider_name: "", source_url: "",
+  file_format: "csv", update_frequency: "monthly", license_note: "",
+  data_kind: "actual_price", estimate_usable: true, redistribution_note: "",
 };
 
 const OFFICIAL_PRESETS: DataSourceInput[] = [
@@ -15,13 +17,16 @@ const OFFICIAL_PRESETS: DataSourceInput[] = [
     source_code: "ESTAT_MATERIAL_SUPPLY",
     source_name: "e-Stat 主要建設資材需給・価格動向調査",
     source_type: "material",
-    provider_name: "経済産業省",
+    provider_name: "国土交通省",
     source_url:
       "https://www.e-stat.go.jp/stat-search?query=%E4%B8%BB%E8%A6%81%E5%BB%BA%E8%A8%AD%E8%B3%87%E6%9D%90%E9%9C%80%E7%B5%A6%E3%83%BB%E4%BE%A1%E6%A0%BC%E5%8B%95%E5%90%91%E8%AA%BF%E6%9F%BB&layout=dataset",
     file_format: "xlsx",
     update_frequency: "monthly",
+    data_kind: "trend_assessment",
+    estimate_usable: false,
+    redistribution_note: "国土交通省公表の調査結果。社外資料への転載は出典明記・提供元の利用条件に従うこと。",
     license_note:
-      "毎月公表。価格・需給・在庫の動向指数（1〜5段階）を都道府県別に収録。表-2形式は専用変換で全国平均値を取込可能。",
+      "国土交通省が毎月公表する建設資材モニター調査。価格・需給・在庫の動向評価（1〜5段階）を都道府県別に収録。実単価・公的指数ではないため積算の単価根拠には使用不可（参考情報のみ）。",
   },
   {
     source_code: "ESTAT_CPI",
@@ -31,6 +36,8 @@ const OFFICIAL_PRESETS: DataSourceInput[] = [
     source_url: "https://www.e-stat.go.jp/stat-search/files?toukei=00200573",
     file_format: "api",
     update_frequency: "monthly",
+    data_kind: "official_index",
+    estimate_usable: true,
     license_note:
       "e-Stat API（getStatsData / getSimpleStatsData）を利用。appId（無料登録）必須。例: statsDataId=0003427113（2020年基準）",
   },
@@ -42,6 +49,8 @@ const OFFICIAL_PRESETS: DataSourceInput[] = [
     source_url: "https://www.kensetsu-plaza.com/market",
     file_format: "html",
     update_frequency: "monthly",
+    data_kind: "actual_price",
+    estimate_usable: true,
     license_note: "Web公開中心・APIなし。自動取得は利用規約を確認のうえ手動取込（CSV/Excel化）する。",
   },
   {
@@ -53,6 +62,8 @@ const OFFICIAL_PRESETS: DataSourceInput[] = [
       "https://www.mlit.go.jp/report/press/tochi_fudousan_kensetsugyo14_hh_000001_00261.html",
     file_format: "pdf",
     update_frequency: "yearly",
+    data_kind: "actual_price",
+    estimate_usable: true,
     license_note: "毎年3月適用分を公表。PDF/Excel中心で標準APIなし。再配布は出典明記等の条件を確認。",
   },
 ];
@@ -162,6 +173,8 @@ export default function DataSourcesPage() {
                   <th className="py-2">コード</th>
                   <th>名称</th>
                   <th>提供元</th>
+                  <th>データ種別</th>
+                  <th>積算利用</th>
                   <th>形式</th>
                   <th>更新頻度</th>
                   <th>URL</th>
@@ -176,6 +189,24 @@ export default function DataSourcesPage() {
                     <td className="py-2 font-mono text-xs">{s.source_code}</td>
                     <td className="py-2">{s.source_name}</td>
                     <td className="py-2 text-xs">{s.provider_name}</td>
+                    <td className="py-2 text-xs">
+                      {s.data_kind ? (
+                        <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${s.data_kind === "trend_assessment" ? "bg-amber-100 text-amber-800" : s.data_kind === "official_index" ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-700"}`}>
+                          {dataKindLabel(s.data_kind)}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="py-2 text-xs">
+                      {s.estimate_usable === undefined ? (
+                        "—"
+                      ) : s.estimate_usable ? (
+                        <span className="rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-700">積算参考可</span>
+                      ) : (
+                        <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">参考のみ</span>
+                      )}
+                    </td>
                     <td className="py-2">{s.file_format ?? "—"}</td>
                     <td className="py-2">{s.update_frequency ?? "—"}</td>
                     <td className="py-2">
@@ -279,6 +310,27 @@ export default function DataSourcesPage() {
                 <label className={labelCls}>利用規約・注記</label>
                 <input className={inputCls} value={form.license_note ?? ""} onChange={(e) => setForm({ ...form, license_note: e.target.value })} />
               </div>
+              <div>
+                <label className={labelCls}>データ種別</label>
+                <select className={inputCls} value={form.data_kind ?? "actual_price"} onChange={(e) => setForm({ ...form, data_kind: e.target.value })}>
+                  <option value="actual_price">実単価</option>
+                  <option value="official_index">公的指数</option>
+                  <option value="trend_assessment">動向評価値（参考のみ）</option>
+                  <option value="internal_actual">社内実績単価</option>
+                  <option value="adopted_price">採用単価</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>積算利用</label>
+                <select className={inputCls} value={form.estimate_usable ? "usable" : "reference"} onChange={(e) => setForm({ ...form, estimate_usable: e.target.value === "usable" })}>
+                  <option value="usable">積算参考可</option>
+                  <option value="reference">参考のみ</option>
+                </select>
+              </div>
+              <div className="md:col-span-2">
+                <label className={labelCls}>再配布注記</label>
+                <input className={inputCls} value={form.redistribution_note ?? ""} onChange={(e) => setForm({ ...form, redistribution_note: e.target.value })} />
+              </div>
             </div>
             <button onClick={() => void create()} className="mt-3 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
               登録
@@ -317,7 +369,7 @@ export default function DataSourcesPage() {
           <div className="cci-card p-4">
             <h2 className="mb-1 text-base font-semibold">URLから取得（CSV / Excel）</h2>
             <p className="mb-3 text-xs text-gray-500">
-              公開URLから直接取得して取込みます（最大10MB・30秒タイムアウト・SSRFガード付き）。e-Stat 主要建設資材需給・価格動向調査のExcelは専用変換で全国平均値を取込みます。
+              公開URLから直接取得して取込みます（最大10MB・30秒タイムアウト・SSRFガード付き）。e-Stat 主要建設資材需給・価格動向調査のExcelは専用変換で全国平均値を取込みますが、動向評価値（1〜5段階）のため「参考のみ」扱いです。
             </p>
             <div className="grid gap-3 md:grid-cols-3">
               <div>
@@ -352,4 +404,15 @@ export default function DataSourcesPage() {
       )}
     </div>
   );
+}
+
+function dataKindLabel(kind: string): string {
+  const map: Record<string, string> = {
+    actual_price: "実単価",
+    official_index: "公的指数",
+    trend_assessment: "動向評価値",
+    internal_actual: "社内実績",
+    adopted_price: "採用単価",
+  };
+  return map[kind] ?? kind;
 }

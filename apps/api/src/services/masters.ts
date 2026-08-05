@@ -23,14 +23,14 @@ export async function listItems(sql: Sql, category?: string) {
   const rows = category
     ? await sql`
         SELECT id, item_code, item_name, category, sub_category, standard_name,
-               default_unit, display_order, is_active
+               default_unit, data_kind, estimate_usable, display_order, is_active
         FROM items
         WHERE is_active = true AND category = ${category}
         ORDER BY display_order NULLS LAST, item_code
       `
     : await sql`
         SELECT id, item_code, item_name, category, sub_category, standard_name,
-               default_unit, display_order, is_active
+               default_unit, data_kind, estimate_usable, display_order, is_active
         FROM items
         WHERE is_active = true
         ORDER BY display_order NULLS LAST, item_code
@@ -43,6 +43,8 @@ export async function listItems(sql: Sql, category?: string) {
     sub_category: r.sub_category,
     standard_name: r.standard_name,
     default_unit: r.default_unit,
+    data_kind: r.data_kind,
+    estimate_usable: r.estimate_usable,
     display_order: r.display_order,
     is_active: r.is_active,
   }));

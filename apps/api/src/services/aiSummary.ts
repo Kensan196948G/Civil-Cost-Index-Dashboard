@@ -119,7 +119,7 @@ export async function buildMarketSummary(
   if (providerInfo.provider !== "none") {
     try {
       const { system, prompt } = buildSummaryPrompt(facts, audience);
-      const result = await generateAiText(env, { system, prompt, maxTokens: 1500 });
+      const result = await generateAiText(env, { system, prompt, maxTokens: 1500 }, "summary");
       if (result && result.text) {
         text = result.text;
         generatedBy = "ai";

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { extractWorkersAiText, getAiProviderInfo, maskSensitive } from "../src/lib/ai";
+import { describe, expect, it, vi } from "vitest";
+import { extractWorkersAiText, generateAiText, getAiProviderInfo, getAiProviderInfoForTask, maskSensitive } from "../src/lib/ai";
 import { buildSeriesFacts, computeStreak, monthsBetween, summarizeFacts } from "../src/services/aiFacts";
 import { buildFallbackSummary, buildSummaryPrompt } from "../src/services/aiSummary";
 import { buildFallbackExplanation } from "../src/services/aiAlerts";
@@ -42,6 +42,24 @@ describe("getAiProviderInfo", () => {
     const info = getAiProviderInfo({ ...baseEnv, AI: { run: async () => ({}) } });
     expect(info.provider).toBe("workers-ai");
   });
+  it("uses deepseek when only deepseek key set", () => {
+    const info = getAiProviderInfo({ ...baseEnv, DEEPSEEK_API_KEY: "ds-key" });
+    expect(info.provider).toBe("deepseek");
+    expect(info.model).toBe("deepseek-chat");
+  });
+  it("uses perplexity when only perplexity key set", () => {
+    const info = getAiProviderInfo({ ...baseEnv, PERPLEXITY_API_KEY: "pplx-key" });
+    expect(info.provider).toBe("perplexity");
+    expect(info.model).toBe("sonar");
+  });
+  it("prefers anthropic over deepseek", () => {
+    const info = getAiProviderInfo({ ...baseEnv, ANTHROPIC_API_KEY: "sk-test", DEEPSEEK_API_KEY: "ds-key" });
+    expect(info.provider).toBe("anthropic");
+  });
+  it("forced deepseek without key returns none", () => {
+    const info = getAiProviderInfo({ ...baseEnv, AI_PROVIDER: "deepseek" });
+    expect(info.provider).toBe("none");
+  });
   it("respects AI_PROVIDER=none override", () => {
     const info = getAiProviderInfo({ ...baseEnv, ANTHROPIC_API_KEY: "sk-test", AI_PROVIDER: "none" });
     expect(info.provider).toBe("none");
@@ -49,6 +67,101 @@ describe("getAiProviderInfo", () => {
   it("respects AI_MODEL override", () => {
     const info = getAiProviderInfo({ ...baseEnv, ANTHROPIC_API_KEY: "sk-test", AI_MODEL: "claude-sonnet-5" });
     expect(info.model).toBe("claude-sonnet-5");
+  });
+  it("deepseek model override", () => {
+    const info = getAiProviderInfo({ ...baseEnv, DEEPSEEK_API_KEY: "ds-key", DEEPSEEK_MODEL: "deepseek-reasoner" });
+    expect(info.model).toBe("deepseek-reasoner");
+  });
+  it("routes by task when AI_ROUTING configured", () => {
+    const info = getAiProviderInfoForTask(
+      { ...baseEnv, DEEPSEEK_API_KEY: "ds-key", ANTHROPIC_API_KEY: "sk-test", AI_ROUTING: JSON.stringify({ summary: "deepseek", report: "anthropic" }) },
+      "summary"
+    );
+    expect(info.provider).toBe("deepseek");
+    const report = getAiProviderInfoForTask(
+      { ...baseEnv, DEEPSEEK_API_KEY: "ds-key", ANTHROPIC_API_KEY: "sk-test", AI_ROUTING: JSON.stringify({ report: "anthropic" }) },
+      "report"
+    );
+    expect(report.provider).toBe("anthropic");
+  });
+  it("falls back to default priority when routed provider not configured", () => {
+    const info = getAiProviderInfoForTask(
+      { ...baseEnv, ANTHROPIC_API_KEY: "sk-test", AI_ROUTING: JSON.stringify({ summary: "perplexity" }) },
+      "summary"
+    );
+    expect(info.provider).toBe("anthropic");
+  });
+});
+
+describe("generateAiText (OpenAI互換プロバイダー)", () => {
+  it("calls DeepSeek chat completions endpoint", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: " 回答テキスト " } }],
+          usage: { prompt_tokens: 12, completion_tokens: 7 },
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const res = await generateAiText(
+        { ...baseEnv, DEEPSEEK_API_KEY: "ds-key", AI_PROVIDER: "deepseek" },
+        { system: "system", prompt: "prompt" }
+      );
+      expect(res?.provider).toBe("deepseek");
+      expect(res?.text).toBe("回答テキスト");
+      expect(res?.inputTokens).toBe(12);
+      expect(res?.outputTokens).toBe(7);
+      const url = fetchMock.mock.calls[0][0] as string;
+      expect(url).toContain("api.deepseek.com/chat/completions");
+      const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+      expect(body.model).toBe("deepseek-chat");
+      expect(body.messages[0].content).toBe("system");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("calls Perplexity chat completions endpoint", async () => {
+    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "回答" } }],
+          usage: { prompt_tokens: 5, completion_tokens: 3 },
+          citations: ["https://example.com"],
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const res = await generateAiText(
+        { ...baseEnv, PERPLEXITY_API_KEY: "pplx-key", AI_PROVIDER: "perplexity" },
+        { system: "s", prompt: "p" }
+      );
+      expect(res?.provider).toBe("perplexity");
+      expect(res?.text).toBe("回答");
+      const url = fetchMock.mock.calls[0][0] as string;
+      expect(url).toContain("api.perplexity.ai/chat/completions");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("throws on provider HTTP error", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response("bad key", { status: 401 })));
+    try {
+      await expect(
+        generateAiText(
+          { ...baseEnv, DEEPSEEK_API_KEY: "ds-key", AI_PROVIDER: "deepseek" },
+          { system: "s", prompt: "p" }
+        )
+      ).rejects.toThrow(/DeepSeek APIエラー（HTTP 401）/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

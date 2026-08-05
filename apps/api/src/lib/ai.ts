@@ -10,9 +10,11 @@ import type { Env } from "../types";
  */
 
 export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5";
+export const DEFAULT_DEEPSEEK_MODEL = "deepseek-chat";
+export const DEFAULT_PERPLEXITY_MODEL = "sonar";
 export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
-export type AiProvider = "anthropic" | "workers-ai" | "none";
+export type AiProvider = "anthropic" | "deepseek" | "perplexity" | "workers-ai" | "none";
 
 export type AiProviderInfo = {
   provider: AiProvider;
@@ -28,25 +30,107 @@ export type AiGenerateResult = {
   outputTokens: number | null;
 };
 
+export type AiProviderDetail = {
+  provider: AiProvider;
+  label: string;
+  configured: boolean;
+  model: string | null;
+};
+
 export function getAiProviderInfo(env: Env): AiProviderInfo {
   const forced = (env.AI_PROVIDER || "").trim().toLowerCase();
   if (forced === "none") return { provider: "none", model: null };
-  if (forced === "anthropic" || (!forced && env.ANTHROPIC_API_KEY)) {
-    if (!env.ANTHROPIC_API_KEY) return { provider: "none", model: null };
+  const validForced: AiProvider[] = ["anthropic", "deepseek", "perplexity", "workers-ai"];
+  if (forced && validForced.includes(forced as AiProvider)) {
+    if (forced === "anthropic" && env.ANTHROPIC_API_KEY) {
+      return { provider: "anthropic", model: env.AI_MODEL || DEFAULT_ANTHROPIC_MODEL };
+    }
+    if (forced === "deepseek" && env.DEEPSEEK_API_KEY) {
+      return { provider: "deepseek", model: env.DEEPSEEK_MODEL || env.AI_MODEL || DEFAULT_DEEPSEEK_MODEL };
+    }
+    if (forced === "perplexity" && env.PERPLEXITY_API_KEY) {
+      return { provider: "perplexity", model: env.PERPLEXITY_MODEL || env.AI_MODEL || DEFAULT_PERPLEXITY_MODEL };
+    }
+    if (forced === "workers-ai" && env.AI) {
+      return { provider: "workers-ai", model: env.AI_MODEL || DEFAULT_WORKERS_AI_MODEL };
+    }
+    return { provider: "none", model: null };
+  }
+  if (!forced && env.ANTHROPIC_API_KEY) {
     return { provider: "anthropic", model: env.AI_MODEL || DEFAULT_ANTHROPIC_MODEL };
   }
-  if (forced === "workers-ai" || (!forced && env.AI)) {
-    if (!env.AI) return { provider: "none", model: null };
+  if (!forced && env.DEEPSEEK_API_KEY) {
+    return { provider: "deepseek", model: env.DEEPSEEK_MODEL || env.AI_MODEL || DEFAULT_DEEPSEEK_MODEL };
+  }
+  if (!forced && env.PERPLEXITY_API_KEY) {
+    return { provider: "perplexity", model: env.PERPLEXITY_MODEL || env.AI_MODEL || DEFAULT_PERPLEXITY_MODEL };
+  }
+  if (!forced && env.AI) {
     return { provider: "workers-ai", model: env.AI_MODEL || DEFAULT_WORKERS_AI_MODEL };
   }
   return { provider: "none", model: null };
 }
 
+export function getAiProviderInfoForTask(env: Env, task?: string): AiProviderInfo {
+  if (!task) return getAiProviderInfo(env);
+  let routing: Record<string, string> = {};
+  try {
+    routing = env.AI_ROUTING ? (JSON.parse(env.AI_ROUTING) as Record<string, string>) : {};
+  } catch {
+    routing = {};
+  }
+  const mapped = (routing[task] ?? "").trim().toLowerCase();
+  if (mapped) {
+    const forced = { ...env, AI_PROVIDER: mapped };
+    const info = getAiProviderInfo(forced);
+    if (info.provider !== "none") return info;
+  }
+  return getAiProviderInfo(env);
+}
+
+export function getRoutingConfig(env: Env): Record<string, string> {
+  try {
+    return env.AI_ROUTING ? (JSON.parse(env.AI_ROUTING) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getAvailableProviders(env: Env): AiProviderDetail[] {
+  return [
+    {
+      provider: "anthropic",
+      label: "Anthropic",
+      configured: !!env.ANTHROPIC_API_KEY,
+      model: env.AI_MODEL || DEFAULT_ANTHROPIC_MODEL,
+    },
+    {
+      provider: "deepseek",
+      label: "DeepSeek",
+      configured: !!env.DEEPSEEK_API_KEY,
+      model: env.DEEPSEEK_MODEL || env.AI_MODEL || DEFAULT_DEEPSEEK_MODEL,
+    },
+    {
+      provider: "perplexity",
+      label: "Perplexity",
+      configured: !!env.PERPLEXITY_API_KEY,
+      model: env.PERPLEXITY_MODEL || env.AI_MODEL || DEFAULT_PERPLEXITY_MODEL,
+    },
+    {
+      provider: "workers-ai",
+      label: "Workers AI",
+      configured: !!env.AI,
+      model: env.AI_MODEL || DEFAULT_WORKERS_AI_MODEL,
+    },
+  ];
+}
+
 export async function generateAiText(
   env: Env,
-  opts: { system: string; prompt: string; maxTokens?: number }
+  opts: { system: string; prompt: string; maxTokens?: number },
+  task?: string
 ): Promise<AiGenerateResult | null> {
-  const info = getAiProviderInfo(env);
+  const info = getAiProviderInfoForTask(env, task);
   if (info.provider === "none" || !info.model) return null;
   const started = Date.now();
 
@@ -76,6 +160,10 @@ export async function generateAiText(
     };
   }
 
+  if (info.provider === "deepseek" || info.provider === "perplexity") {
+    return callOpenAiCompatible(env, info.provider, info.model, opts);
+  }
+
   // Workers AI
   const raw = await env.AI!.run(info.model, {
     messages: [
@@ -92,6 +180,50 @@ export async function generateAiText(
     durationMs: Date.now() - started,
     inputTokens: null,
     outputTokens: null,
+  };
+}
+
+async function callOpenAiCompatible(
+  env: Env,
+  provider: "deepseek" | "perplexity",
+  model: string,
+  opts: { system: string; prompt: string; maxTokens?: number }
+): Promise<AiGenerateResult> {
+  const apiKey = provider === "deepseek" ? env.DEEPSEEK_API_KEY : env.PERPLEXITY_API_KEY;
+  const baseUrl = provider === "deepseek" ? "https://api.deepseek.com" : "https://api.perplexity.ai";
+  const started = Date.now();
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: opts.system },
+        { role: "user", content: opts.prompt },
+      ],
+      max_tokens: opts.maxTokens ?? 2048,
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`${provider === "deepseek" ? "DeepSeek" : "Perplexity"} APIエラー（HTTP ${res.status}）: ${detail.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const text = (data.choices?.[0]?.message?.content ?? "").trim();
+  if (!text) throw new Error(`${provider === "deepseek" ? "DeepSeek" : "Perplexity"} が空の応答を返しました。`);
+  return {
+    text,
+    provider,
+    model,
+    durationMs: Date.now() - started,
+    inputTokens: data.usage?.prompt_tokens ?? null,
+    outputTokens: data.usage?.completion_tokens ?? null,
   };
 }
 

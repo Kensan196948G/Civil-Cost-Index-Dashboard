@@ -3,16 +3,18 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { loadPrefs, savePrefs } from "@/lib/utils";
-import type { Region } from "@/types/api";
+import type { AuthMe, Region } from "@/types/api";
 
 export default function SettingsPage() {
   const [regions, setRegions] = useState<Region[]>([]);
   const [regionCode, setRegionCode] = useState("JP-01");
   const [period, setPeriod] = useState("3y");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [me, setMe] = useState<AuthMe | null>(null);
 
   useEffect(() => {
     void api.regions().then((r) => setRegions(r.regions)).catch(() => undefined);
+    void api.authMe().then(setMe).catch(() => undefined);
     const p = loadPrefs();
     setRegionCode(p.regionCode ?? "JP-01");
     setPeriod(p.period ?? "3y");
@@ -31,6 +33,15 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">ユーザー設定</h1>
+      {me && (
+        <div className="max-w-lg rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-1 text-base font-semibold">現在の利用者</h2>
+          <div className="text-sm">
+            <div>{me.display_name ?? me.email} <span className="text-xs text-gray-400">（{me.source === "admin-key" ? "Admin Key" : me.source === "access-jwt" ? "Cloudflare Access" : "未認証"}）</span></div>
+            <div className="mt-1 text-xs text-gray-500">役割: {me.role_labels.join(" / ")}</div>
+          </div>
+        </div>
+      )}
       <div className="max-w-lg rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
         <div className="space-y-4">
           <div>

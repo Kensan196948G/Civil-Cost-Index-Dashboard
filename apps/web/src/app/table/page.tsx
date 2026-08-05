@@ -65,7 +65,9 @@ export default function TablePage() {
 
   const rows: TableRow[] = series.flatMap((s) =>
     s.points.map((p) => ({
-      period: p.period, label: s.label, value: p.value, unit: s.unit, mom: p.mom_rate, yoy: p.yoy_rate, status: p.status, source: s.source_name,
+      period: p.period, label: s.label, value: p.value, unit: s.unit,
+      dataKind: s.data_kind, estimateUsable: s.estimate_usable,
+      mom: p.mom_rate, yoy: p.yoy_rate, status: p.status, source: s.source_name,
     }))
   );
 

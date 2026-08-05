@@ -492,6 +492,8 @@ erDiagram
         varchar source_code
         varchar source_name
         varchar source_type
+        varchar data_kind
+        boolean estimate_usable
         text source_url
         boolean is_active
     }
@@ -512,6 +514,8 @@ erDiagram
         date period_date
         decimal value
         varchar unit
+        varchar data_kind
+        boolean estimate_usable
     }
 
     regions {
@@ -524,6 +528,8 @@ erDiagram
         uuid id PK
         varchar item_code
         varchar item_name
+        varchar data_kind
+        boolean estimate_usable
     }
 ```
 
@@ -552,6 +558,8 @@ erDiagram
 | sub_category | VARCHAR(100) | 任意 | サブ分類 |
 | standard_name | VARCHAR(200) | 任意 | 規格名 |
 | default_unit | VARCHAR(50) | 任意 | 標準単位 |
+| data_kind | VARCHAR(30) | 必須 | actual_price / official_index / trend_assessment / internal_actual / adopted_price |
+| estimate_usable | BOOLEAN | 必須 | 積算の単価根拠に利用してよいか（falseは参考のみ） |
 | display_order | INTEGER | 任意 | 表示順 |
 | is_active | BOOLEAN | 必須 | 有効フラグ |
 | created_at | TIMESTAMP | 必須 | 作成日時 |
@@ -570,6 +578,9 @@ erDiagram
 | file_format | VARCHAR(20) | 任意 | csv / xlsx / pdf / html / api |
 | update_frequency | VARCHAR(30) | 任意 | monthly / yearly / irregular |
 | license_note | TEXT | 任意 | 利用規約・注意事項 |
+| data_kind | VARCHAR(30) | 必須 | データ種別（実単価／公的指数／動向評価値／社内実績／採用単価） |
+| estimate_usable | BOOLEAN | 必須 | 積算利用可否 |
+| redistribution_note | TEXT | 任意 | 社外資料への転載可否・利用条件の台帳 |
 | is_active | BOOLEAN | 必須 | 有効フラグ |
 | last_fetched_at | TIMESTAMP | 任意 | 最終取得日時 |
 | created_at | TIMESTAMP | 必須 | 作成日時 |
@@ -588,6 +599,8 @@ erDiagram
 | period_date | DATE | 必須 | 対象年月日。月次は月初日 |
 | value | DECIMAL(18,4) | 必須 | 値 |
 | unit | VARCHAR(50) | 任意 | 単位 |
+| data_kind | VARCHAR(30) | 必須 | 行単位のデータ種別（品目・ソースから継承） |
+| estimate_usable | BOOLEAN | 必須 | 行単位の積算利用可否 |
 | base_period | VARCHAR(20) | 任意 | 指数の基準時点 |
 | original_item_name | VARCHAR(200) | 任意 | 取得元の品目名 |
 | original_region_name | VARCHAR(200) | 任意 | 取得元の地域名 |

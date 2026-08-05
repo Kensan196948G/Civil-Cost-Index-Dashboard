@@ -9,6 +9,8 @@ export interface TableRow {
   label: string;
   value: number | null;
   unit: string;
+  dataKind?: string;
+  estimateUsable?: boolean;
   mom: number | null;
   yoy: number | null;
   status: string;
@@ -65,6 +67,7 @@ export default function DataTable({ rows }: { rows: TableRow[] }) {
               <Th k="label">品目・地域</Th>
               <Th k="value">値</Th>
               <Th k="unit">単位</Th>
+              <Th k="dataKind">データ種別</Th>
               <Th k="mom">前月比</Th>
               <Th k="yoy">前年比</Th>
               <Th k="status">状態</Th>
@@ -78,6 +81,23 @@ export default function DataTable({ rows }: { rows: TableRow[] }) {
                 <td className="px-3 py-2">{r.label}</td>
                 <td className="px-3 py-2 text-right">{formatNumber(r.value, 4)}</td>
                 <td className="px-3 py-2 whitespace-nowrap">{r.unit}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {r.dataKind && (
+                    <span
+                      className={classNames(
+                        "mr-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium",
+                        r.dataKind === "trend_assessment"
+                          ? "bg-amber-100 text-amber-800"
+                          : r.dataKind === "official_index"
+                            ? "bg-indigo-100 text-indigo-800"
+                            : "bg-slate-100 text-slate-700"
+                      )}
+                    >
+                      {dataKindLabel(r.dataKind)}
+                    </span>
+                  )}
+                  {r.estimateUsable === false && <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">参考のみ</span>}
+                </td>
                 <td className={classNames("px-3 py-2 text-right", r.mom !== null && r.mom > 0 ? "text-red-600" : r.mom !== null && r.mom < 0 ? "text-blue-600" : "text-gray-500")}>
                   {formatRate(r.mom)}
                 </td>
@@ -90,7 +110,7 @@ export default function DataTable({ rows }: { rows: TableRow[] }) {
             ))}
             {paged.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-gray-500">
+                <td colSpan={9} className="px-3 py-6 text-center text-gray-500">
                   データがありません
                 </td>
               </tr>
@@ -116,6 +136,17 @@ export default function DataTable({ rows }: { rows: TableRow[] }) {
       </div>
     </div>
   );
+}
+
+function dataKindLabel(kind: string): string {
+  const map: Record<string, string> = {
+    actual_price: "実単価",
+    official_index: "公的指数",
+    trend_assessment: "動向評価値",
+    internal_actual: "社内実績",
+    adopted_price: "採用単価",
+  };
+  return map[kind] ?? kind;
 }
 
 function statusLabel(status: string): string {

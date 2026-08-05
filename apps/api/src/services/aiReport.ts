@@ -146,7 +146,7 @@ export async function generateReport(
   if (providerInfo.provider !== "none") {
     try {
       const { system, prompt } = buildReportNarrativePrompt(facts, opts.reportType);
-      const result = await generateAiText(env, { system, prompt, maxTokens: 1500 });
+      const result = await generateAiText(env, { system, prompt, maxTokens: 1500 }, "report");
       if (result && result.text) {
         narrative = result.text;
         generatedBy = "ai";

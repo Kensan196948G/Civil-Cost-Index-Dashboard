@@ -1,0 +1,93 @@
+# 数量計算書AI取込・図面OCRの評価手順
+
+更新日: 2026-08-05
+
+## 1. 数量計算書ExcelのAI取込（実装済み）
+
+### 機能
+- `POST /api/quantities/ai-extract`：数量計算書CSV/Excelを取込むと、工種体系（work_type_trees）へ
+  「コード一致 → 名称一致 → 類似名称 → AI対応付け」の順で候補を生成
+- 候補は `ai_suggestions`（`quantity_extraction`）に保存され、**承認**で `quantities` へ反映、
+  **却下**で破棄（承認フロー）
+- AI（DeepSeek等）は候補と理由のみ生成し、数量・金額の確定は行わない
+
+### 画面
+- `/admin/quantities` →「AI数量取込」でファイルを選択し、抽出→候補一覧→個別に承認/却下
+
+## 2. 精度評価（サンプル・正解ラベル付き）
+
+### サンプル生成
+
+```bash
+node scripts/generate-quantity-samples.mjs
+# → data/samples/quantity_sheet_sample.csv（10行・expected_tree_code 付き）
+```
+
+表記ゆれ（掘削工／掘削（土砂）／床掘り／コンクリート／舗装工 など）を含む。
+
+### 評価実行（案件と基準の作成後に実施）
+
+```bash
+ADMIN_API_KEY=... node scripts/evaluate-ai-extraction.mjs \
+  --project-id <案件ID> --base-id <基準ID（MLIT-2026等）>
+```
+
+出力例:
+```
+AI抽出: deepseek / deepseek-chat
+候補: 10行 / 正解あり: 10行
+細別一致率: 90.0%（9/10）
+判定: PASS（90%以上）
+```
+
+受入基準: **細別一致率90%以上、数量誤差±5%以内**（数量誤差は承認後の積算結果照合で確認）。
+
+## 3. 図面OCR（合成サンプルによる精度評価）
+
+`POST /api/ai/drawing-extract` を実装済み（PNG/JPEG/WebP・Anthropic Vision）。
+抽出候補は `quantity_extraction` として保存され、既存の承認フローで `quantities` へ反映できます。
+
+実図面のサンプルがないため、以下の順で整備する。
+
+1. **合成図面PDFの生成**
+   - 寸法・数量が既知（=正解ラベル）の簡単な図面（平面図・断面図）を自前で生成
+   - 寸法・数量を変えて数十件作成し、AI拾い出し精度の評価データにする
+2. **公表図面・過去案件**
+   - 国交省・地方整備局・自治体の入札/発注図面、自社の過去案件図面（社内利用・機密管理）
+3. **マルチモーダルAI（Anthropic Vision等）での候補抽出**
+   - 図面画像から「細別・数量・施工条件」の候補を生成（金額は確定しない）
+4. **評価指標**
+   - 細別一致率90%以上、数量誤差±5%以内を達成するまで「候補」運用
+   - 最終数量は必ず積算担当の確認・承認
+
+### 合成図面サンプル
+
+`apps/api/scripts/generate-synthetic-drawings.mjs`（依存ゼロ・ビットマップフォント）:
+- 寸法（W/D/H）と数量（VOL）が既知の平面図・断面図をPNGで生成（`data/samples/drawings/`）
+- 正解ラベルCSV（tree_code, expected_quantity, unit）を併せて出力
+
+```bash
+cd apps/api
+node scripts/generate-synthetic-drawings.mjs 10
+```
+
+### 精度評価
+
+前提: 稼働中のAPI・`AI_PROVIDER=anthropic`（Vision対応）。
+
+```bash
+cd apps/api
+ADMIN_API_KEY=... node scripts/evaluate-drawing-ocr.mjs \
+  --project-id <案件ID> --base-id <基準ID> --api http://127.0.0.1:18000
+```
+
+評価指標:
+- 細別一致率 = 期待 tree_code と抽出 tree_code が一致した割合
+- 数量誤差率 = |抽出数量 − 期待数量| ÷ 期待数量 × 100（中央値）
+
+受入基準: **細別一致率90%以上・数量誤差中央値±5%以内**でPASS。
+
+## 4. 注意
+
+- AI候補は常に人確認・承認が必要（計算・確定はコード）
+- 図面OCRのサンプル著作権・機密管理を遵守

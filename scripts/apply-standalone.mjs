@@ -1,7 +1,7 @@
-// standalone HTML を WebUI ルートへ適用する同期スクリプト
+// standalone HTML を /standalone.html として提供する同期スクリプト
 // 1) リポジトリルートの正本 → apps/web/public/standalone.html にコピー
-// 2) 静的エクスポート時は out/index.html を standalone へのリダイレクトに差し替え
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+// 2) ルート「/」は React WebUI（Next.js 静的エクスポート）をそのまま配信する
+import { copyFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,7 +18,5 @@ if (!existsSync(source)) {
 
 const outDir = join(root, "apps", "web", "out");
 if (process.env.NEXT_STATIC_EXPORT === "1" && existsSync(outDir)) {
-  // ルートを standalone HTML そのもので直接提供（リダイレクトなし）
-  copyFileSync(publicTarget, join(outDir, "index.html"));
-  console.log("[apply-standalone] static export root = standalone.html (redirect なし)");
+  console.log("[apply-standalone] ルートは React WebUI を維持（standalone は /standalone.html のみ）");
 }

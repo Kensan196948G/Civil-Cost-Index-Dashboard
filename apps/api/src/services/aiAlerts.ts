@@ -101,7 +101,7 @@ export async function explainAlerts(
   if (providerInfo.provider !== "none" && withContext.length > 0) {
     try {
       const { system, prompt } = buildAlertExplainPrompt(withContext);
-      const result = await generateAiText(env, { system, prompt, maxTokens: 2000 });
+      const result = await generateAiText(env, { system, prompt, maxTokens: 2000 }, "alerts");
       if (result && result.text) {
         const lines = result.text
           .split("\n")

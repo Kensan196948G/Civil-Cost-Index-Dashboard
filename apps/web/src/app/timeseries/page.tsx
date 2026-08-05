@@ -102,6 +102,8 @@ export default function TimeseriesPage() {
       label: s.label,
       value: p.value,
       unit: s.unit,
+      dataKind: s.data_kind,
+      estimateUsable: s.estimate_usable,
       mom: p.mom_rate,
       yoy: p.yoy_rate,
       status: p.status,

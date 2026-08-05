@@ -40,6 +40,8 @@ export interface Item {
   sub_category: string | null;
   standard_name: string | null;
   default_unit: string | null;
+  data_kind: string;
+  estimate_usable: boolean;
   display_order: number | null;
   is_active: boolean;
 }
@@ -59,6 +61,8 @@ export interface Series {
   unit: string;
   source_name: string;
   source_url: string | null;
+  data_kind: string;
+  estimate_usable: boolean;
   points: SeriesPoint[];
 }
 
@@ -118,6 +122,9 @@ export interface DataSource {
   file_format: string | null;
   update_frequency: string | null;
   license_note: string | null;
+  data_kind: string;
+  estimate_usable: boolean;
+  redistribution_note: string | null;
   is_active: boolean;
   last_fetched_at: string | null;
 }
@@ -131,7 +138,886 @@ export interface DataSourceInput {
   file_format?: string;
   update_frequency?: string;
   license_note?: string;
+  data_kind?: string;
+  estimate_usable?: boolean;
+  redistribution_note?: string;
   is_active?: boolean;
+}
+
+// ---- RBAC・監査（優先度A） ----
+
+export type Role =
+  | "viewer"
+  | "data_ingester"
+  | "data_approver"
+  | "estimator"
+  | "estimating_manager"
+  | "auditor"
+  | "system_admin";
+
+export interface AuthMe {
+  email: string;
+  display_name: string | null;
+  roles: string[];
+  role_labels: string[];
+  source: string;
+  authenticated: boolean;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  display_name: string | null;
+  roles: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OperationAuditLog {
+  id: string;
+  actor_email: string;
+  actor_role: string | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  detail: unknown;
+  created_at: string;
+}
+
+// ---- 単価版管理・スナップショット ----
+
+export interface PriceVersion {
+  id: string;
+  data_source_id: string;
+  source_name: string;
+  source_code: string;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  data_kind: string;
+  estimate_usable: boolean;
+  region_id: string | null;
+  region_name: string | null;
+  region_code: string | null;
+  version_label: string | null;
+  value: number;
+  unit: string;
+  publication_date: string | null;
+  effective_start: string;
+  effective_end: string | null;
+  revised_at: string | null;
+  retroactive: boolean;
+  delivery_terms: string | null;
+  tax_inclusive: boolean;
+  freight_included: boolean;
+  note: string | null;
+  status: "draft" | "approved" | "retired";
+  parent_version_id: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PriceVersionInput {
+  data_source_id: string;
+  item_id: string;
+  region_id?: string | null;
+  version_label?: string | null;
+  value: number;
+  unit: string;
+  publication_date?: string | null;
+  effective_start: string;
+  effective_end?: string | null;
+  revised_at?: string | null;
+  retroactive?: boolean;
+  delivery_terms?: string | null;
+  tax_inclusive?: boolean;
+  freight_included?: boolean;
+  note?: string | null;
+  parent_version_id?: string | null;
+}
+
+export interface SnapshotItem {
+  id: string;
+  price_version_id: string | null;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  region_id: string | null;
+  region_name: string | null;
+  unit: string;
+  value: number;
+  data_source_name: string | null;
+  effective_start: string | null;
+  effective_end: string | null;
+}
+
+export interface PriceSnapshot {
+  id: string;
+  name: string;
+  description: string | null;
+  snapshot_date: string;
+  created_by: string;
+  created_at: string;
+  item_count?: number;
+  items?: SnapshotItem[];
+}
+
+export interface PriceVersionComparison {
+  current: PriceVersion;
+  previous: PriceVersion | null;
+  diff: {
+    value: { old: number; new: number };
+    diff: number;
+    diff_rate: number | null;
+    effective_start: { old: string | null; new: string | null };
+    effective_end: { old: string | null; new: string | null };
+    tax_inclusive: { old: boolean; new: boolean };
+    freight_included: { old: boolean; new: boolean };
+    delivery_terms: { old: string | null; new: string | null };
+  } | null;
+}
+
+// ---- 定期取得・承認待ち ----
+
+export interface FetchSchedule {
+  id: string;
+  data_source_id: string;
+  source_name: string;
+  source_code: string;
+  schedule_name: string | null;
+  schedule_type: "daily" | "monthly" | "yearly";
+  expected_day: number | null;
+  expected_interval_days: number | null;
+  enabled: boolean;
+  approval_required: boolean;
+  notify_channels: string[];
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_status: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FetchScheduleInput {
+  data_source_id: string;
+  schedule_name?: string | null;
+  schedule_type?: "daily" | "monthly" | "yearly";
+  expected_day?: number | null;
+  expected_interval_days?: number | null;
+  enabled?: boolean;
+  approval_required?: boolean;
+  notify_channels?: string[];
+}
+
+export interface StagedIngestion {
+  id: string;
+  data_source_id: string;
+  source_name: string;
+  source_code: string;
+  schedule_id: string | null;
+  file_name: string | null;
+  original_url: string | null;
+  total_rows: number;
+  error_rows: number;
+  status: "pending" | "approved" | "rejected";
+  created_by: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+// ---- 案件影響分析（Phase 2） ----
+
+export interface Project {
+  id: string;
+  name: string;
+  client_name: string | null;
+  work_type: string | null;
+  region_id: string | null;
+  region_name: string | null;
+  bid_date: string | null;
+  contract_date: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  items: ProjectItem[];
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  client_name: string | null;
+  work_type: string | null;
+  region_id: string | null;
+  region_name: string | null;
+  bid_date: string | null;
+  contract_date: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+  base_total: number;
+}
+
+export interface ProjectItem {
+  id: string;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  data_kind: string;
+  estimate_usable: boolean;
+  region_id: string | null;
+  region_name: string | null;
+  region_code: string | null;
+  quantity: number;
+  base_unit_price: number;
+  procurement_month: string | null;
+  note: string | null;
+}
+
+export interface SimulationRequest {
+  scenarios?: Array<{ name: string; delta: number }>;
+  index_item_id?: string | null;
+  base_period?: string | null;
+}
+
+export interface SimulationItem {
+  item_id: string;
+  item_name: string;
+  data_kind: string;
+  estimate_usable: boolean;
+  region_name: string | null;
+  procurement_month: string | null;
+  quantity: number;
+  base_unit_price: number;
+  base_amount: number;
+  actual_rate: number | null;
+  scenario_delta: number;
+  effective_rate: number;
+  impact_amount: number;
+  projected_unit_price: number;
+}
+
+export interface SimulationScenario {
+  name: string;
+  delta: number;
+  items: SimulationItem[];
+  total_base: number;
+  total_impact: number;
+  total_projected: number;
+}
+
+export interface SimulationResult {
+  project: { id: string; name: string; status: string };
+  index_item_id: string | null;
+  base_period: string | null;
+  scenarios: SimulationScenario[];
+  monthly: Array<{ period: string; impacts: Record<string, number> }>;
+  warnings: string[];
+}
+
+// ---- 港湾工事コストモデル（PoC） ----
+
+export interface Vessel {
+  id: string;
+  vessel_code: string;
+  vessel_name: string;
+  category: string;
+  capacity: number | null;
+  capacity_unit: string | null;
+  hire_rate_per_day: number;
+  availability_factor: number;
+  mobilization_days: number;
+  standby_rate: number;
+  is_active: boolean;
+  note: string | null;
+}
+
+export interface PortWorkType {
+  id: string;
+  work_type_code: string;
+  work_type_name: string;
+  unit: string;
+  description: string | null;
+  vessels: Array<{
+    quantity_per_unit: number;
+    is_primary: boolean;
+    vessel: Vessel;
+  }>;
+}
+
+export interface PortEstimateRow {
+  vessel_code: string;
+  vessel_name: string;
+  category: string;
+  daily_output: number;
+  work_days: number;
+  standby_days: number;
+  hire_cost: number;
+  mobilization_cost: number;
+  total_cost: number;
+}
+
+export interface PortEstimate {
+  work_type: { id: string; code: string; name: string; unit: string };
+  quantity: number;
+  result: {
+    operation_rate: number;
+    mobilization_days: number;
+    rows: PortEstimateRow[];
+    total_cost: number;
+    assumptions: string[];
+  };
+}
+
+// ---- 積算エンジン（Phase 4） ----
+
+export interface OverheadRate {
+  rate_type: "common_temp" | "site_management" | "general_management";
+  rate: number;
+  correction_json: Record<string, unknown>;
+  applicable_from: string | null;
+  applicable_to: string | null;
+}
+
+export interface EstimationBase {
+  id: string;
+  base_code: string;
+  base_name: string;
+  category: string;
+  fiscal_year: number;
+  applicable_from: string;
+  applicable_to: string | null;
+  rounding_rules: Record<string, string>;
+  status: string;
+  source_type: string | null;
+  source_note: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  rates: OverheadRate[];
+}
+
+export interface EstimationBaseInput {
+  base_code: string;
+  base_name: string;
+  category?: string;
+  fiscal_year: number;
+  applicable_from: string;
+  applicable_to?: string | null;
+  rounding_rules?: Record<string, string>;
+  status?: string;
+  source_type?: string | null;
+  source_note?: string | null;
+}
+
+export interface WorkTypeTree {
+  id: string;
+  base_id: string;
+  parent_id: string | null;
+  level: number;
+  code: string;
+  name: string;
+  unit: string | null;
+  standard_name: string | null;
+  is_active: boolean;
+}
+
+export interface ResourceItem {
+  name: string;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface WorkBreakdown {
+  id: string;
+  base_id: string;
+  tree_id: string;
+  tree_code: string;
+  tree_name: string;
+  condition_json: Record<string, unknown>;
+  labor: ResourceItem[];
+  material: ResourceItem[];
+  machinery: ResourceItem[];
+  note: string | null;
+  source_type: string | null;
+  created_by: string;
+  updated_at: string;
+}
+
+export interface WorkBreakdownInput {
+  base_id: string;
+  tree_id: string;
+  condition_json: Record<string, unknown>;
+  labor: ResourceItem[];
+  material: ResourceItem[];
+  machinery: ResourceItem[];
+  note?: string | null;
+  source_type?: string | null;
+}
+
+export interface QuantityRow {
+  id: string;
+  project_id: string;
+  tree_id: string;
+  tree_code: string;
+  tree_name: string;
+  item_name: string | null;
+  standard_name: string | null;
+  unit: string | null;
+  quantity: number;
+  condition_json: Record<string, unknown>;
+  source_note: string | null;
+  created_by: string;
+  updated_at: string;
+}
+
+export interface QuantityInput {
+  project_id: string;
+  tree_id: string;
+  item_name?: string | null;
+  standard_name?: string | null;
+  unit?: string | null;
+  quantity: number;
+  condition_json: Record<string, unknown>;
+  source_note?: string | null;
+}
+
+export interface QuantityAiCandidate {
+  suggestion_id: string | null;
+  row_number: number;
+  raw_item: string;
+  tree_id: string | null;
+  tree_code: string | null;
+  tree_name: string | null;
+  quantity: number | null;
+  unit: string | null;
+  condition_json: Record<string, unknown>;
+  match_method: "exact" | "fuzzy" | "ai" | "none";
+  score: number;
+  reason: string;
+}
+
+export interface QuantityAiSuggestion {
+  id: string;
+  target_id: string;
+  content: {
+    row_number: number;
+    raw_item: string;
+    tree_id: string | null;
+    tree_code: string | null;
+    tree_name: string | null;
+    quantity: number | null;
+    unit: string | null;
+    condition_json: Record<string, unknown>;
+    match_method: string;
+    score: number;
+  };
+  rationale: string;
+  provider: string;
+  model: string | null;
+  status: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface EstimateSummary {
+  id: string;
+  project_id: string;
+  project_name: string;
+  base_id: string;
+  base_code: string;
+  base_name: string;
+  name: string;
+  status: string;
+  direct_cost: number;
+  common_temp_cost: number;
+  site_management_cost: number;
+  general_management_cost: number;
+  subtotal: number;
+  tax_amount: number;
+  total: number;
+  created_by: string;
+  created_at: string;
+}
+
+export interface EstimateLine {
+  id: string;
+  tree_id: string | null;
+  tree_code: string | null;
+  tree_name: string | null;
+  unit: string | null;
+  quantity: number;
+  breakdown_id: string | null;
+  labor_cost: number;
+  material_cost: number;
+  machinery_cost: number;
+  direct_cost: number;
+  note: string | null;
+}
+
+export interface EstimateMaterial {
+  id: string;
+  line_id: string | null;
+  resource_type: string;
+  resource_name: string;
+  unit: string | null;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  source_note: string | null;
+}
+
+export interface EstimateDetail extends EstimateSummary {
+  rounding_rule_json: Record<string, string>;
+  warnings: string[];
+  port_options: {
+    operation_rate: number;
+    mobilization_days: number | null;
+    soil_correction: number;
+    night_surcharge: number;
+    soil_factor?: number;
+    transport_coefficient?: number;
+    spoil_unit_price?: number;
+    soil_type_code?: string | null;
+    spoil_ground_code?: string | null;
+    transport_distance_km?: number | null;
+    shift_rules?: string[];
+    shift_labor_surcharge?: number;
+    shift_machinery_surcharge?: number;
+  } | null;
+  port_extras: {
+    operation_rate: number;
+    work_days: number;
+    standby_days: number;
+    mobilization_days: number;
+    mobilization_cost: number;
+    soil_correction: number;
+    night_surcharge: number;
+    soil_factor: number;
+    transport_coefficient: number;
+    soil_type_code: string | null;
+    spoil_ground_code: string | null;
+    transport_distance_km: number | null;
+    disposal_cost: number;
+    shift_labor_surcharge: number;
+    shift_machinery_surcharge: number;
+    shift_rules: string[];
+  } | null;
+  lines: EstimateLine[];
+  materials: EstimateMaterial[];
+}
+
+export interface BreakdownSuggestion {
+  provider: string;
+  model: string | null;
+  suggestions: Array<{
+    quantity_id: string;
+    tree_code: string;
+    tree_name: string;
+    breakdown_id: string;
+    score: number;
+    reason: string;
+  }>;
+}
+
+export interface SeaCondition {
+  id: string;
+  sea_area_code: string;
+  sea_area_name: string;
+  target_month: number;
+  wave_height_limit: number | null;
+  wind_speed_limit: number | null;
+  turbidity_allowed: boolean;
+  navigation_restriction: string | null;
+  workable_days: number;
+  calendar_days: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface WorkabilityResult {
+  sea_area_code: string;
+  sea_area_name: string;
+  target_month: number;
+  workable_days_base: number;
+  workable_days: number;
+  calendar_days: number;
+  operation_rate: number;
+  conditions: {
+    wave_height_limit: number | null;
+    wind_speed_limit: number | null;
+    turbidity_allowed: boolean;
+    navigation_restriction: string | null;
+  };
+  warnings: string[];
+}
+
+export interface SoilType {
+  id: string;
+  soil_code: string;
+  soil_name: string;
+  dredging_correction_factor: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface TransportRate {
+  id: string;
+  distance_km: number;
+  transport_coefficient: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface SpoilGround {
+  id: string;
+  spoil_code: string;
+  spoil_name: string;
+  area_name: string | null;
+  distance_km: number | null;
+  disposal_unit_price: number;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface ShiftRule {
+  id: string;
+  rule_code: string;
+  rule_name: string;
+  shift_type: "night" | "rotation" | "overtime";
+  time_from: string | null;
+  time_to: string | null;
+  labor_surcharge_rate: number;
+  machinery_surcharge_rate: number;
+  conditions_json: Record<string, unknown>;
+  is_active: boolean;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface ChangeOrderSummary {
+  id: string;
+  project_id: string;
+  project_name: string;
+  base_id: string | null;
+  base_code: string | null;
+  estimate_id: string | null;
+  name: string;
+  change_date: string | null;
+  reason: string | null;
+  status: string;
+  created_by: string;
+  created_at: string;
+  net_diff: number;
+}
+
+export interface ChangeOrderLine {
+  id: string;
+  tree_id: string | null;
+  tree_code: string;
+  tree_name: string;
+  unit: string;
+  before_quantity: number;
+  after_quantity: number;
+  before_unit_price: number;
+  after_unit_price: number;
+  quantity_diff: number;
+  amount_diff: number;
+  note: string | null;
+}
+
+export interface ChangeOrderDetail extends ChangeOrderSummary {
+  lines: ChangeOrderLine[];
+  summary: { increase: number; decrease: number; net: number };
+}
+
+export interface QuotationSummary {
+  id: string;
+  project_id: string;
+  project_name: string;
+  supplier_name: string;
+  quote_date: string;
+  valid_until: string | null;
+  status: string;
+  tax_inclusive: boolean;
+  freight_included: boolean;
+  conditions_json: Record<string, unknown>;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+  item_count: number;
+  expiry: { expired: boolean; expiring_soon: boolean; days_left: number | null };
+}
+
+export interface QuotationComparisonRow {
+  key: string;
+  item_name: string;
+  standard_name: string | null;
+  unit: string | null;
+  supplier_name: string;
+  unit_price: number;
+  average: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  deviation_rate: number | null;
+  previous_price: number | null;
+  previous_change_rate: number | null;
+  warnings: string[];
+}
+
+export interface QuotationItem extends QuotationComparisonRow {
+  id: string;
+  quotation_id: string;
+  item_id: string | null;
+  tree_id: string | null;
+  is_adopted: boolean;
+  adoption_reason: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface QuotationDetail extends QuotationSummary {
+  items: QuotationItem[];
+  comparison: QuotationComparisonRow[];
+}
+
+export interface EstimationBaseComparison {
+  base_a: { base_code: string; base_name: string; fiscal_year: number };
+  base_b: { base_code: string; base_name: string; fiscal_year: number };
+  rates: Array<{ rate_type: string; old: number | null; new: number | null; diff: number | null }>;
+  breakdowns: Array<{
+    tree_code: string;
+    tree_name: string;
+    condition: Record<string, unknown>;
+    exists_in_new: boolean;
+    resources: Array<{ resource_name: string; unit: string; old_quantity: number; new_quantity: number | null; old_unit_price: number; new_unit_price: number | null }>;
+  }>;
+  changed_count: number;
+}
+
+export interface ApplicableBaseResult {
+  date: string;
+  bases: Array<{ id: string; base_code: string; base_name: string; category: string; fiscal_year: number; applicable_from: string; applicable_to: string | null; status: string }>;
+  warning: string | null;
+}
+
+export interface ForecastScenario {
+  name: string;
+  lower: number;
+  upper: number;
+}
+
+export interface ForecastResult {
+  provider: string;
+  model: string | null;
+  stats: {
+    item_name: string;
+    region_name: string;
+    latest_value: number;
+    latest_period: string;
+    sample_months: number;
+    mom_avg: number;
+    mom_std: number;
+    yoy: number | null;
+    min_value: number;
+    max_value: number;
+    horizon_months: number;
+  };
+  scenarios: ForecastScenario[];
+  narrative: string;
+  warnings: string[];
+  disclaimer: string;
+}
+
+export interface ConstructionRecord {
+  id: string;
+  project_id: string | null;
+  project_name: string | null;
+  item_id: string;
+  item_code: string;
+  item_name: string;
+  region_id: string | null;
+  region_name: string | null;
+  work_date: string;
+  quantity: number;
+  amount: number;
+  unit: string | null;
+  unit_price: number;
+  supplier_name: string | null;
+  source_note: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ConstructionSummaryRow {
+  item_code: string;
+  item_name: string;
+  region_name: string | null;
+  unit: string | null;
+  record_count: number;
+  avg_unit_price: string;
+  median_unit_price: string;
+  min_unit_price: string;
+  max_unit_price: string;
+}
+
+export interface RagChunk {
+  id: string;
+  source_type: string;
+  source_id: string | null;
+  title: string;
+  content: string;
+  similarity: number;
+}
+
+export interface RagAnswerResult {
+  provider: string;
+  model: string | null;
+  answer: string;
+  sources: Array<{ title: string; source_type: string; source_id: string | null; similarity: number }>;
+  chunks: Array<{ title: string; content: string }>;
+}
+
+export interface QuotationReviewResult {
+  provider: string;
+  model: string | null;
+  review: { summary: string; comments: string[]; recommendations: string[] };
+}
+
+export interface ForecastEvaluation {
+  id: string;
+  item_id: string;
+  item_name: string;
+  forecast_date: string;
+  horizon_months: number;
+  forecast_value: number;
+  forecast_lower: number | null;
+  forecast_upper: number | null;
+  actual_value: number | null;
+  actual_period: string | null;
+  error_rate: number | null;
+  sample_months: number | null;
+  status: string;
+  created_at: string;
+}
+
+export interface PortReadiness {
+  ready: boolean;
+  checklist: Array<{ key: string; label: string; current: number; required: number; ok: boolean }>;
+  note: string;
 }
 
 export interface FetchJob {

@@ -45,10 +45,14 @@ export function downloadBlob(blob: Blob, filename: string): void {
 }
 
 export async function downloadCsv(url: string, filename: string): Promise<void> {
+  return downloadFile(url, filename, "CSV");
+}
+
+export async function downloadFile(url: string, filename: string, label = "ファイル"): Promise<void> {
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`CSVダウンロードに失敗しました (${res.status})${text ? `: ${text}` : ""}`);
+    throw new Error(`${label}ダウンロードに失敗しました (${res.status})${text ? `: ${text}` : ""}`);
   }
   downloadBlob(await res.blob(), filename);
 }

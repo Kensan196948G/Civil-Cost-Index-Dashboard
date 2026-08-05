@@ -1,0 +1,6 @@
+vessel_code,vessel_name,category,capacity,capacity_unit,hire_rate_per_day,availability_factor,mobilization_days,standby_rate,note
+GRAB_8M3,グラブ浚渫船 8m3,浚渫船,800,m3/日,950000,0.70,3,0.50,港湾積算基準の正式値に置換
+DUMP_BARGE,土運船 500m3,土運船,500,m3/日,450000,0.75,2,0.50,
+CRANE_150T,起重機船 150t吊,起重機船,60,t/日,1200000,0.70,4,0.50,
+DIVER_TEAM,潜水士班（送気員含む）,潜水作業,1,班,250000,0.80,1,0.50,
+STAGE_BARGE,台船・作業船,その他,1,隻,300000,0.80,2,0.50,

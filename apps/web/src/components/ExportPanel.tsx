@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, CardTitle } from "./ui";
+import { Card, CardTitle } from "./ui";
 
-export default function ExportPanel({ csvUrl, hasData }: { csvUrl: string | null; hasData: boolean }) {
+export default function ExportPanel({
+  csvUrl, xlsxUrl, pdfUrl, pptxUrl, hasData,
+}: { csvUrl: string | null; xlsxUrl: string | null; pdfUrl: string | null; pptxUrl: string | null; hasData: boolean }) {
   const [pdfMessage, setPdfMessage] = useState("");
   return (
     <Card>
@@ -16,13 +18,27 @@ export default function ExportPanel({ csvUrl, hasData }: { csvUrl: string | null
         >
           CSV出力
         </a>
-        <Button
-          variant="secondary"
-          disabled={!hasData}
-          onClick={() => setPdfMessage("PDFレポート生成は現在未実装です（APIが501を返します）。")}
+        <a
+          href={xlsxUrl ?? "#"}
+          download={xlsxUrl ? "cci-export.xlsx" : undefined}
+          className={`rounded px-3 py-2 text-sm font-medium ${xlsxUrl && hasData ? "bg-emerald-600 text-white hover:bg-emerald-700" : "pointer-events-none bg-slate-200 text-slate-400"}`}
         >
-          PDF出力（準備中）
-        </Button>
+          Excel出力
+        </a>
+        <a
+          href={pdfUrl ?? "#"}
+          download={pdfUrl ? "cci-export.pdf" : undefined}
+          className={`rounded px-3 py-2 text-sm font-medium ${pdfUrl && hasData ? "bg-rose-600 text-white hover:bg-rose-700" : "pointer-events-none bg-slate-200 text-slate-400"}`}
+        >
+          PDF出力
+        </a>
+        <a
+          href={pptxUrl ?? "#"}
+          download={pptxUrl ? "cci-export.pptx" : undefined}
+          className={`rounded px-3 py-2 text-sm font-medium ${pptxUrl && hasData ? "bg-violet-600 text-white hover:bg-violet-700" : "pointer-events-none bg-slate-200 text-slate-400"}`}
+        >
+          PowerPoint出力
+        </a>
       </div>
       {pdfMessage && <div className="mt-2 text-xs text-amber-600">{pdfMessage}</div>}
     </Card>

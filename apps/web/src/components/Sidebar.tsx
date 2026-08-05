@@ -10,6 +10,17 @@ const MENU = [
     { href: "/compare", label: "比較分析", icon: "≋" },
     { href: "/table", label: "データテーブル", icon: "☰" },
     { href: "/export", label: "レポート出力", icon: "⤓" },
+    { href: "/projects", label: "案件影響分析", icon: "▥" },
+    { href: "/port", label: "港湾コストモデル", icon: "⚓" },
+    { href: "/estimates", label: "積算計算", icon: "≖" },
+  ]},
+  { group: "積算管理", items: [
+    { href: "/admin/estimation-bases", label: "積算基準・諸経費", icon: "▤" },
+    { href: "/admin/breakdowns", label: "工種・歩掛マスタ", icon: "⌬" },
+    { href: "/admin/quantities", label: "数量計算書", icon: "№" },
+    { href: "/admin/change-orders", label: "設計変更・差額", icon: "⇄" },
+    { href: "/admin/quotations", label: "見積比較・査定", icon: "≍" },
+    { href: "/admin/construction-records", label: "施工実績データ", icon: "▦" },
   ]},
   { group: "AI分析", items: [
     { href: "/ai", label: "AI市況ナビ", icon: "✦" },
@@ -17,9 +28,15 @@ const MENU = [
   { group: "データ管理", items: [
     { href: "/admin/data-sources", label: "データソース管理", icon: "◫" },
     { href: "/admin/fetch-jobs", label: "取込履歴", icon: "↻" },
+    { href: "/admin/schedules", label: "定期取得", icon: "⏰" },
+    { href: "/admin/staged", label: "承認待ちデータ", icon: "✓" },
+    { href: "/admin/price-versions", label: "単価版管理", icon: "¥" },
     { href: "/admin/ai", label: "AI管理", icon: "◈" },
   ]},
   { group: "システム", items: [
+    { href: "/admin/users", label: "ユーザー管理", icon: "☺" },
+    { href: "/admin/audit", label: "操作監査", icon: "✎" },
+    { href: "/admin/management", label: "経営KPI", icon: "◫" },
     { href: "/settings", label: "ユーザー設定", icon: "⚙" },
   ]},
 ];

@@ -21,11 +21,15 @@ export default function AiAdminPage() {
   const [logs, setLogs] = useState<AiAuditLog[] | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
   const [adminKey, setAdminKey] = useState("");
+  const [aiKey, setAiKey] = useState("");
+  const [keyMessage, setKeyMessage] = useState("");
+  const [keyOk, setKeyOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
     setAdminKey(loadPrefs().adminKey ?? "");
+    setAiKey(loadPrefs().aiKey ?? "");
     void (async () => {
       try {
         setStatus(await api.aiStatus());
@@ -33,6 +37,15 @@ export default function AiAdminPage() {
         // ステータス取得失敗は致命的ではない
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    const saved = loadPrefs().aiKey;
+    if (saved) {
+      setAiKey(saved);
+      void loadAudit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadQuality = useCallback(async () => {
@@ -55,15 +68,47 @@ export default function AiAdminPage() {
     setLogsLoading(true);
     setAuditError(null);
     try {
-      savePrefs({ ...loadPrefs(), adminKey });
-      const res = await api.aiAudit(adminKey, { limit: 100 });
+      const prefs = loadPrefs();
+      const effectiveAiKey = prefs.aiKey ?? aiKey;
+      savePrefs({ ...prefs, adminKey, aiKey: effectiveAiKey });
+      const res = await api.aiAudit(adminKey || undefined, { limit: 100 }, effectiveAiKey || undefined);
       setLogs(res.logs);
     } catch (e) {
       setAuditError(e instanceof Error ? e.message : "不明なエラー");
     } finally {
       setLogsLoading(false);
     }
-  }, [adminKey]);
+  }, [adminKey, aiKey]);
+
+  const testKey = async () => {
+    setKeyMessage("");
+    setKeyOk(false);
+    try {
+      const res = await api.aiTestKey(aiKey.trim());
+      setKeyOk(res.ok);
+      setKeyMessage(res.message);
+    } catch (e) {
+      setKeyOk(false);
+      setKeyMessage(e instanceof Error ? e.message : "設定テストに失敗しました");
+    }
+  };
+
+  const saveKey = async () => {
+    savePrefs({ ...loadPrefs(), aiKey: aiKey.trim() });
+    setKeyMessage("DeepSeek APIキーを保存しました。監査ログを再取得します。");
+    setKeyOk(true);
+    await loadAudit();
+  };
+
+  const resetKey = () => {
+    const prefs = loadPrefs();
+    delete prefs.aiKey;
+    savePrefs(prefs);
+    setAiKey("");
+    setKeyMessage("DeepSeek APIキーをリセットしました。");
+    setKeyOk(false);
+    setLogs(null);
+  };
 
   return (
     <div className="space-y-4">
@@ -160,6 +205,36 @@ export default function AiAdminPage() {
 
       {/* AI利用監査ログ */}
       <div className="cci-card p-4">
+        <div className="mb-3 rounded border border-violet-200 bg-violet-50 p-3">
+          <h3 className="mb-1 text-sm font-semibold text-violet-900">DeepSeek APIキー設定</h3>
+          <p className="mb-2 text-[11px] text-violet-700">
+            AI利用監査ログは、サーバーに設定されたDeepSeek APIキーが有効な場合に閲覧できます（管理者キーは不要）。
+            設定テストで有効性を確認し、保存すると監査ログの閲覧に使用します。
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              value={aiKey}
+              onChange={(e) => { setAiKey(e.target.value); setKeyMessage(""); }}
+              placeholder="DeepSeek APIキー"
+              className="w-72 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            />
+            <button onClick={() => void testKey()} className="rounded bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+              設定テスト
+            </button>
+            <button onClick={() => void saveKey()} className="rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+              設定保存
+            </button>
+            <button onClick={() => void resetKey()} className="rounded border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+              リセット
+            </button>
+          </div>
+          {keyMessage && (
+            <div className={`mt-2 rounded p-2 text-xs ${keyOk ? "bg-green-100 text-green-800" : "bg-red-50 text-red-700"}`}>
+              {keyMessage}
+            </div>
+          )}
+        </div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-gray-800">AI利用監査ログ</h3>
           <div className="flex items-center gap-2">

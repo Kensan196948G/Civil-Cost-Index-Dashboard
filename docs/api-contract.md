@@ -118,6 +118,10 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | POST | `/api/ai/quotation-review/{id}` | 見積比較からAI査定コメント生成（候補・要承認） |
 | POST | `/api/ai/forecast/evaluate` | 予測の実績値記録・誤差率算定 |
 | GET | `/api/ai/forecast/evaluations` | 予測実績誤差の履歴（データ充足度含む） |
+| POST | `/api/ai/test-key` | DeepSeek APIキーの設定テスト（サーバー設定と一致＋疎通確認） |
+
+`GET /api/ai/audit` は管理者キー（`X-Admin-Key`）またはサーバーに設定されたDeepSeek APIキー
+（`X-AI-Key`）が一致する場合に閲覧できます。
 
 `/api/reports/management.*` は `?audience=executive|estimator|sales` でハイライトを変更できます。
 AI候補（数量・歩掛・査定・図面OCR）の生成時は Teams/Slack に承認依頼が通知されます

@@ -516,9 +516,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(params),
     }),
-  aiAudit: (adminKey: string, params?: { feature?: string; limit?: number }) =>
+  aiAudit: (adminKey?: string, params?: { feature?: string; limit?: number }, aiKey?: string) =>
     request<{ logs: AiAuditLog[] }>(`/api/ai/audit${buildQuery(params ?? {})}`, {
-      headers: { "X-Admin-Key": adminKey },
+      headers: {
+        ...(adminKey ? { "X-Admin-Key": adminKey } : {}),
+        ...(aiKey ? { "X-AI-Key": aiKey } : {}),
+      },
+    }),
+  aiTestKey: (apiKey: string) =>
+    request<{ ok: boolean; provider: string; message: string }>("/api/ai/test-key", {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: JSON.stringify({ api_key: apiKey }),
     }),
 };
 

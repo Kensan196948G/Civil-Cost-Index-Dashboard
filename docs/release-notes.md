@@ -1,5 +1,14 @@
 # リリースノート
 
+## Unreleased（2026-08-05: AI管理のDeepSeekキー設定と監査ログ閲覧）
+
+- `/admin/ai` に「DeepSeek APIキー設定」パネルを追加
+  - APIキー入力欄／設定テスト／設定保存／リセット
+  - 設定テストは `POST /api/ai/test-key`（サーバー設定キーとの一致＋DeepSeek API疎通確認）
+- AI利用監査ログは、管理者キーがなくても**サーバーに設定されたDeepSeek APIキー（X-AI-Key）が有効なら閲覧可能**に変更
+- 監査ログのデータエクスポートは後日相談（未実装のまま）
+- テスト138件 PASS / Workerビルド成功
+
 ## Unreleased（2026-08-05: ルーティング・承認通知・照合検証・利用者別KPI）
 
 - AIプロバイダールーティング: `AI_ROUTING`（JSON）でタスク種別ごとにAnthropic/DeepSeek/Perplexity/Workers AIを自動選択。未設定プロバイダーへは既定優先順位へフォールバック

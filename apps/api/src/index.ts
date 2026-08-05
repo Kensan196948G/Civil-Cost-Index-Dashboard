@@ -2262,7 +2262,12 @@ app.post("/api/ai/feedback", async (c) => {
 });
 
 app.get("/api/ai/audit", async (c) => {
-  if (!requireAdmin(c)) return fail(c, "UNAUTHORIZED", "管理者キーが必要です。", 401);
+  const aiKey = c.req.header("X-AI-Key")?.trim() ?? "";
+  const serverKey = (c.env.DEEPSEEK_API_KEY ?? "").trim();
+  const aiKeyValid = serverKey !== "" && aiKey === serverKey;
+  if (!aiKeyValid && !requireAdmin(c)) {
+    return fail(c, "UNAUTHORIZED", "管理者キーまたはDeepSeek APIキーが必要です。", 401);
+  }
   const limit = Number(c.req.query("limit") ?? 50);
   if (!Number.isFinite(limit) || limit < 1 || limit > 200) {
     return fail(c, "VALIDATION_ERROR", "limit は 1〜200 で指定してください。", 400);
@@ -2273,6 +2278,41 @@ app.get("/api/ai/audit", async (c) => {
     return ok(c, { logs });
   } catch (e) {
     return handleError(c, e);
+  }
+});
+
+app.post("/api/ai/test-key", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
+  const parsed = z
+    .object({ api_key: z.string().min(1) })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "api_key が必要です。", 400, parsed.error.issues);
+  const key = parsed.data.api_key.trim();
+  const serverKey = (c.env.DEEPSEEK_API_KEY ?? "").trim();
+  if (!serverKey) {
+    return fail(c, "CONFLICT", "サーバーにDeepSeek APIキーが設定されていません（.secrets.env → npm run secrets:sync で設定）。", 409);
+  }
+  if (key !== serverKey) {
+    return fail(c, "UNAUTHORIZED", "設定されているDeepSeek APIキーと一致しません。", 401);
+  }
+  try {
+    const res = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: c.env.DEEPSEEK_MODEL || "deepseek-chat",
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 1,
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return fail(c, "BAD_GATEWAY", `DeepSeek APIがエラーを返しました（HTTP ${res.status}）: ${detail.slice(0, 200)}`, 502);
+    }
+    return ok(c, { ok: true, provider: "deepseek", message: "DeepSeek APIキーは有効です。" });
+  } catch (e) {
+    return fail(c, "BAD_GATEWAY", `DeepSeek APIへの接続に失敗しました: ${e instanceof Error ? e.message : String(e)}`, 502);
   }
 });
 

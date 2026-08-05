@@ -914,4 +914,20 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const mgmtData = (await mgmt.json()) as { data: { data: { port_availability: number | null; project_profit_avg: number | null } } };
     expect(mgmtData.data.data).toHaveProperty("port_availability");
   }, 20000);
+
+  it("ai audit access control and test-key", async () => {
+    const noAuth = await get("/api/ai/audit");
+    expect(noAuth.status).toBe(401);
+    const badKey = await get("/api/ai/audit", { headers: { "X-AI-Key": "wrong-key" } });
+    expect(badKey.status).toBe(401);
+    const adminOk = await get("/api/ai/audit", { headers: { "X-Admin-Key": process.env.ADMIN_API_KEY! } });
+    expect(adminOk.status).toBe(200);
+    // サーバーにDEEPSEEK_API_KEY未設定のためテストは409（設定済み環境では401/200）
+    const testKey = await get("/api/ai/test-key", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! },
+      body: JSON.stringify({ api_key: "dummy" }),
+    });
+    expect([401, 409]).toContain(testKey.status);
+  });
 });

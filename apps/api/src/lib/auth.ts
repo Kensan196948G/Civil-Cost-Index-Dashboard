@@ -27,7 +27,7 @@ export type Identity = {
   email: string;
   display_name: string | null;
   roles: string[];
-  source: "admin-key" | "access-jwt" | "trusted-header" | "anonymous";
+  source: "admin-key" | "access-jwt" | "trusted-header" | "basic-auth" | "anonymous";
 };
 
 export class AuthError extends Error {
@@ -136,6 +136,22 @@ export async function resolveIdentity(
   c: AuthContext,
   sql: Sql
 ): Promise<Identity> {
+  // Basic認証（LAN全体ゲート）: 認証通過者は閲覧者(viewer)として扱う。
+  // 管理操作は X-Admin-Key / Cloudflare Access のRBACが別途要求する。
+  const basic = c.req.header("Authorization") ?? "";
+  if (basic.startsWith("Basic ")) {
+    const basicUser = (c.env.BASIC_AUTH_USERNAME || "").trim();
+    const basicPass = (c.env.BASIC_AUTH_PASSWORD || "").trim();
+    if (basicUser && basicPass && basic === `Basic ${btoa(`${basicUser}:${basicPass}`)}`) {
+      return {
+        email: "basic-auth",
+        display_name: "Basic認証（LANゲート）",
+        roles: ["viewer"],
+        source: "basic-auth",
+      };
+    }
+  }
+
   const adminKey = c.req.header("X-Admin-Key") ?? "";
   if (adminKey && adminKey === (c.env.ADMIN_API_KEY ?? "").trim()) {
     return {
@@ -187,7 +203,10 @@ export async function resolveIdentity(
     }
   }
 
-  return { email: "anonymous", display_name: null, roles: ["viewer"], source: "anonymous" };
+  // 未認証アクセス: デモ環境（ALLOW_ANONYMOUS_VIEWER=true）のみ閲覧者として許可。
+  // 既定は役割なし（roles=[]）とし、requireRole が 401 を返す。
+  const anonymousRoles = c.env.ALLOW_ANONYMOUS_VIEWER === "true" ? ["viewer"] : [];
+  return { email: "anonymous", display_name: null, roles: anonymousRoles, source: "anonymous" };
 }
 
 export function hasRole(identity: Identity, required: string[]): boolean {

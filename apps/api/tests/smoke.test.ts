@@ -32,6 +32,9 @@ beforeAll(async () => {
     ADMIN_API_KEY: process.env.ADMIN_API_KEY ?? "",
     CORS_ORIGINS: "http://localhost:3000",
     APP_VERSION: "0.1.0",
+    // スモークテストは従来どおり匿名閲覧を許可したデモモードで全フローを確認する
+    // （認証境界の検証は "auth boundary" テストで ALLOW_ANONYMOUS_VIEWER を切り替えて実施）
+    ALLOW_ANONYMOUS_VIEWER: "true",
   };
 });
 
@@ -58,6 +61,16 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const res = await get("/api/health/ready");
     expect(res.status).toBe(200);
     expect(res.body.data.database).toBe("ok");
+  });
+
+  it("auth boundary: anonymous is rejected, demo flag allows viewer", async () => {
+    const anonEnv = { ...env, ALLOW_ANONYMOUS_VIEWER: undefined };
+    const rejected = await app!.fetch(new Request("http://localhost/api/projects"), anonEnv);
+    expect(rejected.status).toBe(401);
+
+    const demoEnv = { ...env, ALLOW_ANONYMOUS_VIEWER: "true" };
+    const allowed = await app!.fetch(new Request("http://localhost/api/projects"), demoEnv);
+    expect(allowed.status).toBe(200);
   });
 
   it("regions", async () => {
@@ -472,6 +485,14 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const basesRes = await get("/api/estimation-bases");
     const portBase = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "PORT-2026");
     expect(portBase).toBeDefined();
+    // 積算は承認済み基準のみ実行可（P0対応）。サンプル港湾基準をテスト中のみ承認し、終了時に draft へ戻す
+    const approve = await get(`/api/estimation-bases/${portBase.id}`, {
+      method: "PATCH",
+      headers: admin,
+      body: JSON.stringify({ status: "approved" }),
+    });
+    expect(approve.status).toBe(200);
+    try {
     const treesRes = await get(`/api/work-type-trees?base_id=${portBase.id}`);
     const dredging = treesRes.body.data.trees.find((t: { code: string }) => t.code === "DREDGING");
     expect(dredging).toBeDefined();
@@ -532,6 +553,13 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(delEst.status).toBe(200);
     const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
     expect(delProj.status).toBe(200);
+    } finally {
+      await get(`/api/estimation-bases/${portBase.id}`, {
+        method: "PATCH",
+        headers: admin,
+        body: JSON.stringify({ status: "draft" }),
+      });
+    }
   }, 15000);
 
   it("port sea conditions and workability", async () => {

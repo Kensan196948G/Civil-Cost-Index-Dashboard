@@ -42,3 +42,4 @@ coverage/
 
 # wrangler local secrets
 .dev.vars
+.opencode/

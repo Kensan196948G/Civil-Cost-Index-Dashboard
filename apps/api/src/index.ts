@@ -128,6 +128,7 @@ import {
   calculateEstimate,
   listEstimates,
   getEstimate,
+  confirmEstimate,
   deleteEstimate,
   aiSuggestBreakdowns,
   estimationBaseSchema,
@@ -1628,6 +1629,19 @@ app.get("/api/estimates/:id/export", async (c) => {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="cci-estimate-${c.req.param("id").slice(0, 8)}.xlsx"`,
     });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/estimates/:id/confirm", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimating_manager", "system_admin"]);
+  try {
+    const id = await confirmEstimate(sql, c.req.param("id"), identity);
+    if (!id) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+    await recordAudit(sql, identity, "estimate.confirm", "estimate", String(id));
+    return ok(c, { confirmed: true, estimate_id: String(id) });
   } catch (e) {
     return handleError(c, e);
   }

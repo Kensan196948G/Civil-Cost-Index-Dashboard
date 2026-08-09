@@ -66,7 +66,7 @@
 | 項目 | 対応 | 状態 |
 | --- | --- | --- |
 | Dependabot（npm×2・GitHub Actions） | `.github/dependabot.yml` 新規作成 | ✅ |
-| CodeQL（code scanning） | `.github/workflows/codeql.yml` 新規作成 | ✅ |
+| CodeQL（code scanning） | ⚠️ **freeプランのプライベートリポジトリでは利用不可**（Team/Enterprise限定）。ワークフローを新規作成したが実行不可のため削除。Team/Enterprise移行時または公開リポジトリ化時に有効化 | プラン制約 |
 | Dependabot alerts / 自動修正 | `gh api` で有効化 | ✅ |
 | main ブランチ保護 | CI必須（strict）・PRレビュー1件・管理者にも適用 | ✅ |
 | Secret scanning / push保護 | ⚠️ APIでは無効化された状態を変更できない（現行APIは org の Code security configurations のみ）。**Web UI での手動有効化が必要** | 要手動 |
@@ -75,6 +75,11 @@ Secret scanning の手動有効化手順:
 1. GitHub Web: リポジトリ → Settings → Code security and analysis
 2. "Secret scanning" を Enable（無料プランでは有効）
 3. "Push protection" も Enable を推奨
+
+CodeQL（code scanning）の有効化条件:
+- free プランでは**プライベートリポジトリで利用不可**（パブリックリポジトリのみ）
+- GitHub Team / Enterprise への移行、またはリポジトリ公開時に有効化する
+- 有効化手順: Settings → Code security and analysis → CodeQL を有効化（またはコードを再追加）
 
 ### 2.6 テスト
 

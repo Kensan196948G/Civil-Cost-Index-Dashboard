@@ -117,6 +117,8 @@ systemd ユニット `cci.service` が起動時自動起動し、Docker Compose 
 | DB（正本） | Neon PostgreSQL（ap-southeast-1） | 接続情報は Cloudflare Secret で管理 |
 
 未認証アクセスは Cloudflare Access のログインへリダイレクトされます。
+API Worker 直URL・LAN API への未認証アクセスは **401** を返します（`ALLOW_ANONYMOUS_VIEWER=false` が既定）。
+デモ・評価目的でのみ環境変数 `ALLOW_ANONYMOUS_VIEWER=true` で未認証閲覧者を許可できます。
 
 ## 🏛️ アーキテクチャ
 
@@ -181,7 +183,8 @@ API の認証には次の経路があります。
 | Cloudflare Access JWT | ブラウザでログインした社員 | `users` テーブルに設定された役割 | メールアドレス |
 | `X-Admin-Key` | キーを知る人（原則システム管理者） | **全7役割（システム管理者相当）** | `admin-key` |
 | 信頼ヘッダー | リバースプロキシ設定時（LAN） | ヘッダーで指定された役割 | メールアドレス |
-| 未認証 | 誰でも | 閲覧者（viewer）相当のみ | `anonymous` |
+| Basic認証 | LAN全体ゲート（`BASIC_AUTH_USERNAME/PASSWORD` 設定時） | 閲覧者（viewer）相当 | `basic-auth` |
+| 未認証 | 誰でも | **401（認証必須）**。デモ環境のみ `ALLOW_ANONYMOUS_VIEWER=true` で閲覧者 | `anonymous` |
 
 ```mermaid
 flowchart TB

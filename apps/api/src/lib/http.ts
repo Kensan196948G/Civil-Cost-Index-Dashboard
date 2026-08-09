@@ -50,6 +50,8 @@ export async function requestIdMiddleware(c: AppContext, next: Next) {
 }
 
 export async function basicAuthMiddleware(c: AppContext, next: Next): Promise<Response | void> {
+  // 死活監視用ヘルスチェックは認証対象外（ヘルスチェックは資格情報を送信できないため）
+  if (c.req.path.startsWith("/api/health/")) return next();
   const user = (c.env.BASIC_AUTH_USERNAME || "").trim();
   const pass = (c.env.BASIC_AUTH_PASSWORD || "").trim();
   if (!user && !pass) return next();

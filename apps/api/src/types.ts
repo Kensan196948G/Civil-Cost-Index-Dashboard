@@ -36,6 +36,8 @@ export type Env = {
   CF_ACCESS_AUD?: string;
   /** 任意: リバースプロキシ/テスト用に X-User-Email / X-User-Roles を信頼する（true時のみ） */
   AUTH_TRUST_PROXY?: string;
+  /** 任意: 未認証アクセスを閲覧者(viewer)として許可する（デモ環境のみ。既定は false = 未認証は401） */
+  ALLOW_ANONYMOUS_VIEWER?: string;
   /** 任意: Teams 受信Webhook URL */
   NOTIFY_TEAMS_URL?: string;
   /** 任意: Slack 受信Webhook URL */

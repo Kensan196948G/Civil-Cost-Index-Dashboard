@@ -701,6 +701,14 @@ export async function deleteQuantity(sql: Sql, id: string) {
 
 // ---- 積算計算 ----
 
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export async function calculateEstimate(
   sql: Sql,
   input: {
@@ -709,9 +717,11 @@ export async function calculateEstimate(
     name: string;
     identity: Identity;
     portOptions?: Partial<PortOptions>;
+    /** 任意: 積算時に採用した単価版（採用単価フロー導入後の再現用） */
+    priceVersionId?: string | null;
   }
 ) {
-  const { projectId, baseId, name, identity, portOptions } = input;
+  const { projectId, baseId, name, identity, portOptions, priceVersionId } = input;
   const [project] = await sql`SELECT id, name FROM projects WHERE id = ${projectId}`;
   if (!project) {
     const err = new Error("案件が見つかりません。");
@@ -719,11 +729,29 @@ export async function calculateEstimate(
     throw err;
   }
   const [base] = (await sql`
-    SELECT id, base_code, base_name, category, rounding_rules FROM estimation_bases WHERE id = ${baseId}
+    SELECT id, base_code, base_name, category, fiscal_year, applicable_from, applicable_to,
+           rounding_rules, status, source_type, source_note
+    FROM estimation_bases WHERE id = ${baseId}
   `) as DbRow[];
   if (!base) {
     const err = new Error("積算基準が見つかりません。");
     (err as Error & { status?: number }).status = 404;
+    throw err;
+  }
+  if (String(base.status) !== "approved") {
+    const err = new Error("この積算基準は承認されていないため計算できません。承認済みの積算基準を選択してください。");
+    (err as Error & { status?: number }).status = 409;
+    throw err;
+  }
+  const now = new Date();
+  if (base.applicable_from && new Date(String(base.applicable_from)) > now) {
+    const err = new Error(`この積算基準は ${String(base.applicable_from).slice(0, 10)} から適用のため、現時点では計算できません。`);
+    (err as Error & { status?: number }).status = 409;
+    throw err;
+  }
+  if (base.applicable_to && new Date(String(base.applicable_to)) < now) {
+    const err = new Error(`この積算基準は ${String(base.applicable_to).slice(0, 10)} で適用期間が終了しています。`);
+    (err as Error & { status?: number }).status = 409;
     throw err;
   }
   const quantities = await listQuantities(sql, projectId);
@@ -790,18 +818,75 @@ export async function calculateEstimate(
     port: port ?? undefined,
   });
 
+  // 計算再現用スナップショット: 数量・歩掛・率・基準・港湾条件の一式を固定し、SHA-256でハッシュ化
+  const snapshot = {
+    schema: 1,
+    base: {
+      id: base.id,
+      base_code: base.base_code,
+      base_name: base.base_name,
+      category: base.category,
+      fiscal_year: base.fiscal_year,
+      applicable_from: base.applicable_from ?? null,
+      applicable_to: base.applicable_to ?? null,
+      rounding_rules: base.rounding_rules,
+      status: base.status,
+      source_type: base.source_type,
+    },
+    rates,
+    tax_rate: 0.1,
+    quantities: quantities.map((q) => ({
+      id: q.id,
+      tree_id: q.tree_id,
+      tree_code: q.tree_code,
+      tree_name: q.tree_name,
+      unit: q.unit ?? "",
+      quantity: q.quantity,
+      condition_json: q.condition_json,
+    })),
+    breakdowns: breakdownRows.map((b) => ({
+      id: b.id,
+      tree_id: b.tree_id,
+      labor: b.labor,
+      material: b.material,
+      machinery: b.machinery,
+      condition_json: b.condition_json,
+    })),
+    price_version_id: priceVersionId ?? null,
+    port: port
+      ? {
+          operation_rate: port.operation_rate,
+          mobilization_days: port.mobilization_days,
+          soil_correction: port.soil_correction,
+          night_surcharge: port.night_surcharge,
+          soil_factor: port.soil_factor,
+          soil_type_code: port.soil_type_code,
+          spoil_unit_price: port.spoil_unit_price,
+          spoil_ground_code: port.spoil_ground_code,
+          transport_coefficient: port.transport_coefficient,
+          transport_distance_km: port.transport_distance_km,
+          shift_rules: port.shift_rules,
+          shift_labor_surcharge: port.shift_labor_surcharge,
+          shift_machinery_surcharge: port.shift_machinery_surcharge,
+        }
+      : null,
+  };
+  const snapshotSha256 = await sha256Hex(JSON.stringify(snapshot));
+
   const [header] = await sql`
     INSERT INTO estimate_headers
       (project_id, base_id, name, status, direct_cost, common_temp_cost,
        site_management_cost, general_management_cost, subtotal, tax_amount, total,
-       rounding_rule_json, warnings, port_options, port_extras, created_by)
+       rounding_rule_json, warnings, port_options, port_extras,
+       price_version_id, input_snapshot, snapshot_sha256, created_by)
     VALUES
       (${projectId}, ${baseId}, ${name}, 'draft', ${result.direct_cost},
        ${result.common_temp_cost}, ${result.site_management_cost},
        ${result.general_management_cost}, ${result.subtotal}, ${result.tax_amount},
        ${result.total}, ${JSON.stringify(base.rounding_rules)},
        ${JSON.stringify(result.warnings)}, ${port ? JSON.stringify(port) : null},
-       ${result.port_extras ? JSON.stringify(result.port_extras) : null}, ${identity.email})
+       ${result.port_extras ? JSON.stringify(result.port_extras) : null},
+       ${priceVersionId ?? null}, ${JSON.stringify(snapshot)}, ${snapshotSha256}, ${identity.email})
     RETURNING id
   `;
 
@@ -947,11 +1032,43 @@ async function loadVesselsMap(sql: Sql): Promise<Map<string, VesselInfo>> {
   );
 }
 
+export async function confirmEstimate(sql: Sql, id: string, identity: Identity) {
+  const [row] = await sql`
+    SELECT status FROM estimate_headers WHERE id = ${id}
+  `;
+  if (!row) {
+    const err = new Error("積算結果が見つかりません。");
+    (err as Error & { status?: number }).status = 404;
+    throw err;
+  }
+  if (String(row.status) === "confirmed") {
+    const err = new Error("この積算は既に確定済みです。");
+    (err as Error & { status?: number }).status = 409;
+    throw err;
+  }
+  const [updated] = await sql`
+    UPDATE estimate_headers
+    SET status = 'confirmed', confirmed_by = ${identity.email}, confirmed_at = now(), updated_at = now()
+    WHERE id = ${id}
+    RETURNING id
+  `;
+  return updated ?? null;
+}
+
 export async function deleteEstimate(sql: Sql, id: string) {
   const [row] = await sql`
+    SELECT status FROM estimate_headers WHERE id = ${id}
+  `;
+  if (!row) return null;
+  if (String(row.status) === "confirmed") {
+    const err = new Error("確定済みの積算は削除できません。変更積算として新規作成してください。");
+    (err as Error & { status?: number }).status = 409;
+    throw err;
+  }
+  const [deleted] = await sql`
     DELETE FROM estimate_headers WHERE id = ${id} RETURNING id
   `;
-  return row ?? null;
+  return deleted ?? null;
 }
 
 // ---- AI歩掛選定候補 ----

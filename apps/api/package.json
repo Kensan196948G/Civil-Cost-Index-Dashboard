@@ -15,6 +15,7 @@
     "start": "node dist-node/server.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",
+    "db:seed:demo": "node scripts/seed-demo.mjs",
     "deploy": "wrangler deploy",
     "secrets:cloudflare": "node ../../scripts/sync-secrets.mjs --cloudflare",
     "secrets:local": "node ../../scripts/sync-secrets.mjs --local",

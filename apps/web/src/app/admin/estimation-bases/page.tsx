@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ErrorMessage, LoadingState } from "@/components/Status";
+import { EmptyState, ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { loadPrefs } from "@/lib/utils";
 import type { ApplicableBaseResult, EstimationBase, EstimationBaseComparison } from "@/types/api";
@@ -134,6 +134,9 @@ export default function EstimationBasesPage() {
               <label className={labelCls}>管理者キー（X-Admin-Key）</label>
               <input type="password" className={inputCls} value={adminKey} onChange={(e) => setAdminKey(e.target.value)} />
             </div>
+            {bases.length === 0 ? (
+              <EmptyState label="積算基準が登録されていません" />
+            ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-xs text-gray-600">
@@ -183,6 +186,7 @@ export default function EstimationBasesPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-2 text-base font-semibold">新規基準</h2>

@@ -158,9 +158,55 @@ export default function EstimatesPage() {
     }
   };
 
+  const submit = async (id: string) => {
+    if (!window.confirm("この積算を確認依頼（承認待ち）へ提出しますか？")) return;
+    try {
+      await api.submitEstimate(id);
+      setNotice("積算を確認依頼へ提出しました。");
+      await loadEstimates();
+      await open(id);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "提出に失敗しました");
+    }
+  };
+
+  const approve = async (id: string) => {
+    if (!window.confirm("この積算を承認して確定しますか？承認後の編集・削除はできません。")) return;
+    try {
+      await api.approveEstimate(id);
+      setNotice("積算を承認・確定しました。");
+      await loadEstimates();
+      await open(id);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "承認に失敗しました");
+    }
+  };
+
+  const reject = async (id: string) => {
+    if (!window.confirm("確認依頼を差し戻し、下書きに戻しますか？")) return;
+    try {
+      await api.rejectEstimate(id);
+      setNotice("確認依頼を差し戻しました。");
+      await loadEstimates();
+      await open(id);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "差し戻しに失敗しました");
+    }
+  };
+
   const inputCls = "w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs font-semibold text-gray-600";
   const money = (v: number) => formatNumber(v);
+  const statusLabel = (s: string) =>
+    ({ draft: "下書き", review: "確認依頼中", approved: "承認済み", confirmed: "確定（旧）", superseded: "失効" })[s] ?? s;
+  const statusCls = (s: string) =>
+    s === "approved" || s === "confirmed"
+      ? "bg-green-100 text-green-700"
+      : s === "review"
+        ? "bg-blue-100 text-blue-700"
+        : s === "superseded"
+          ? "bg-gray-100 text-gray-500"
+          : "bg-amber-100 text-amber-700";
   const selectedBase = bases.find((b) => b.id === baseId);
   const isPort = selectedBase?.category === "port";
 
@@ -277,10 +323,12 @@ export default function EstimatesPage() {
               {estimates.map((e) => (
                 <div key={e.id} className="flex items-center justify-between rounded border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50">
                   <button onClick={() => void open(e.id)} className="flex-1 text-left">
-                    <div>{e.name} <span className="text-xs text-gray-400">（{e.base_code}）</span></div>
+                    <div>{e.name} <span className="text-xs text-gray-400">（{e.base_code}）</span>
+                      <span className={`ml-1 rounded px-1.5 py-0.5 text-[10px] ${statusCls(e.status)}`}>{statusLabel(e.status)}</span>
+                    </div>
                     <div className="text-xs text-gray-500">{formatDateTime(e.created_at)} / 合計 {money(e.total)}円</div>
                   </button>
-                  <button onClick={() => void remove(e.id)} className="ml-2 text-xs text-red-600 hover:underline">削除</button>
+                  {e.status === "draft" && <button onClick={() => void remove(e.id)} className="ml-2 text-xs text-red-600 hover:underline">削除</button>}
                 </div>
               ))}
               {estimates.length === 0 && <div className="py-4 text-center text-sm text-gray-400">まだ積算結果がありません</div>}
@@ -292,14 +340,32 @@ export default function EstimatesPage() {
               <>
                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                   <div className="mb-2 flex items-center justify-between">
-                    <h2 className="text-base font-semibold">総括表（{detail.name} / {detail.base_code}）</h2>
+                    <div>
+                      <h2 className="text-base font-semibold">総括表（{detail.name} / {detail.base_code}）</h2>
+                      <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs ${statusCls(detail.status)}`}>{statusLabel(detail.status)}</span>
+                    </div>
                     <div className="flex gap-2">
-                      <a href={api.estimateExportUrl(detail.id)} download={`cci-estimate-${detail.id.slice(0, 8)}.xlsx`} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                      {detail.status === "draft" && (
+                        <button onClick={() => void submit(detail.id)} className="rounded border border-blue-400 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50">
+                          確認依頼へ提出
+                        </button>
+                      )}
+                      {detail.status === "review" && (
+                        <>
+                          <button onClick={() => void approve(detail.id)} className="rounded border border-green-500 px-2 py-1 text-xs text-green-700 hover:bg-green-50">
+                            承認・確定
+                          </button>
+                          <button onClick={() => void reject(detail.id)} className="rounded border border-amber-400 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50">
+                            差し戻し
+                          </button>
+                        </>
+                      )}
+                      <button onClick={() => void downloadFile(api.estimateExportUrl(detail.id), `cci-estimate-${detail.id.slice(0, 8)}.xlsx`, "積算書Excel")} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
                         積算書Excel出力
-                      </a>
-                      <a href={api.estimatePdfExportUrl(detail.id)} download={`cci-estimate-${detail.id.slice(0, 8)}.pdf`} className="rounded border border-rose-400 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                      </button>
+                      <button onClick={() => void downloadFile(api.estimatePdfExportUrl(detail.id), `cci-estimate-${detail.id.slice(0, 8)}.pdf`, "積算書PDF")} className="rounded border border-rose-400 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
                         積算書PDF出力
-                      </a>
+                      </button>
                       <button onClick={() => void suggest()} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50">AI歩掛候補</button>
                     </div>
                   </div>

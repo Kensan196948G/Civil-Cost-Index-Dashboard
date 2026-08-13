@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { Client } from "pg";
 import * as XLSX from "xlsx";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,12 +41,25 @@ beforeAll(async () => {
 
 async function get(pathname: string, init?: RequestInit) {
   const res = await app!.fetch(new Request(`http://localhost${pathname}`, init), env);
+  const text = await res.text();
   return {
     status: res.status,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body: JSON.parse(await res.text()) as { success: boolean; data: any; error: any; meta: any },
-    text: await res.text().catch(() => ""),
+    body: JSON.parse(text) as { success: boolean; data: any; error: any; meta: any },
+    text,
   };
+}
+
+async function cleanupEstimateDirect(id: string) {
+  const client = new Client({
+    connectionString: process.env.DATABASE_URL_DIRECT || process.env.DATABASE_URL,
+  });
+  await client.connect();
+  try {
+    await client.query(`DELETE FROM estimate_headers WHERE id = $1`, [id]);
+  } finally {
+    await client.end();
+  }
 }
 
 describe.skipIf(!hasDb)("integration smoke", () => {
@@ -67,10 +81,47 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const anonEnv = { ...env, ALLOW_ANONYMOUS_VIEWER: undefined };
     const rejected = await app!.fetch(new Request("http://localhost/api/projects"), anonEnv);
     expect(rejected.status).toBe(401);
+    expect(rejected.headers.get("x-content-type-options")).toBe("nosniff");
 
     const demoEnv = { ...env, ALLOW_ANONYMOUS_VIEWER: "true" };
     const allowed = await app!.fetch(new Request("http://localhost/api/projects"), demoEnv);
     expect(allowed.status).toBe(200);
+  });
+
+  it("rate limit returns 429 after configured per-minute limit", async () => {
+    const limitedEnv = { ...env, RATE_LIMIT_PER_MINUTE: "2" };
+    const headers = { "CF-Connecting-IP": "203.0.113.42" };
+    const first = await app!.fetch(new Request("http://localhost/api/regions", { headers }), limitedEnv);
+    const second = await app!.fetch(new Request("http://localhost/api/regions", { headers }), limitedEnv);
+    const third = await app!.fetch(new Request("http://localhost/api/regions", { headers }), limitedEnv);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(third.status).toBe(429);
+  });
+
+  it("auth boundary: market data / export / AI endpoints are also protected", async () => {
+    const anonEnv = { ...env, ALLOW_ANONYMOUS_VIEWER: undefined };
+    const paths = [
+      "/api/timeseries?data_type=MATERIAL_PRICE",
+      "/api/compare?series=MATERIAL_PRICE:STEEL_H:JP-01",
+      "/api/dashboard/summary",
+      "/api/data-sources",
+      "/api/fetch-jobs",
+      "/api/export/csv?data_type=MATERIAL_PRICE",
+      "/api/export/xlsx?data_type=MATERIAL_PRICE",
+      "/api/export/pdf?data_type=MATERIAL_PRICE",
+      "/api/export/pptx?data_type=MATERIAL_PRICE",
+      "/api/ai/status",
+      "/api/ai/templates",
+      "/api/reports/management.json",
+    ];
+    for (const path of paths) {
+      const res = await app!.fetch(new Request(`http://localhost${path}`), anonEnv);
+      expect(res.status, `${path} should be 401 without auth`).toBe(401);
+    }
+
+    const demoRes = await app!.fetch(new Request("http://localhost/api/ai/status"), env);
+    expect(demoRes.status).toBe(200);
   });
 
   it("regions", async () => {
@@ -480,6 +531,84 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     expect(delProj.status).toBe(200);
   });
 
+  it("estimating: approval flow draft→review→approved, delete locked, supersede", async () => {
+    const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const basesRes = await get("/api/estimation-bases");
+    const base = basesRes.body.data.estimation_bases.find((b: { base_code: string }) => b.base_code === "MLIT-2026");
+    expect(base).toBeDefined();
+
+    const proj = await get("/api/projects", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ name: "スモーク 承認フロー", work_type: "土工", status: "planning" }),
+    });
+    expect(proj.status).toBe(201);
+    const projectId = proj.body.data.project.id;
+
+    const treesRes = await get(`/api/work-type-trees?base_id=${base.id}`);
+    const soil = treesRes.body.data.trees.find((t: { code: string }) => t.code === "SOIL_EXCAVATION");
+    expect(soil).toBeDefined();
+    await get("/api/quantities", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, tree_id: soil.id, quantity: 300, unit: "m3", condition_json: {} }),
+    });
+
+    const calc = await get("/api/estimates/calculate", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, base_id: base.id, name: "承認フロー積算" }),
+    });
+    expect(calc.status).toBe(201);
+    const estimateId = calc.body.data.estimate.id;
+    expect(calc.body.data.estimate.snapshot_sha256).toMatch(/^[0-9a-f]{64}$/);
+
+    // draft → review
+    const submit = await get(`/api/estimates/${estimateId}/submit`, { method: "POST", headers: admin });
+    expect(submit.status).toBe(200);
+    const reviewDetail = await get(`/api/estimates/${estimateId}`);
+    expect(reviewDetail.body.data.estimate.status).toBe("review");
+    expect(reviewDetail.body.data.estimate.submitted_by).toBeTruthy();
+
+    // review → approved
+    const approve = await get(`/api/estimates/${estimateId}/approve`, { method: "POST", headers: admin });
+    expect(approve.status).toBe(200);
+    const approvedDetail = await get(`/api/estimates/${estimateId}`);
+    expect(approvedDetail.body.data.estimate.status).toBe("approved");
+    expect(approvedDetail.body.data.estimate.approved_by).toBeTruthy();
+
+    // approved estimates cannot be deleted
+    const delLocked = await get(`/api/estimates/${estimateId}`, { method: "DELETE", headers: admin });
+    expect(delLocked.status).toBe(409);
+
+    // approve → superseded by a new change estimate
+    const calc2 = await get("/api/estimates/calculate", {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ project_id: projectId, base_id: base.id, name: "変更積算" }),
+    });
+    expect(calc2.status).toBe(201);
+    const supersedingId = calc2.body.data.estimate.id;
+
+    const supersede = await get(`/api/estimates/${estimateId}/supersede`, {
+      method: "POST",
+      headers: admin,
+      body: JSON.stringify({ superseding_id: supersedingId }),
+    });
+    expect(supersede.status).toBe(200);
+    const supersededDetail = await get(`/api/estimates/${estimateId}`);
+    expect(supersededDetail.body.data.estimate.status).toBe("superseded");
+    expect(supersededDetail.body.data.estimate.superseded_by).toBe(supersedingId);
+
+    // cleanup: remove superseded estimate first (FK superseded_by points to superseding),
+    // then delete the draft superseding estimate via API
+    await cleanupEstimateDirect(estimateId);
+    const del2 = await get(`/api/estimates/${supersedingId}`, { method: "DELETE", headers: admin });
+    expect(del2.status).toBe(200);
+    const delProj = await get(`/api/projects/${projectId}`, { method: "DELETE", headers: admin });
+    expect(delProj.status).toBe(200);
+  }, 30000);
+
   it("estimating: port (浚渫) with vessel hire/standby/mobilization", async () => {
     const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
     const basesRes = await get("/api/estimation-bases");
@@ -826,24 +955,34 @@ describe.skipIf(!hasDb)("integration smoke", () => {
   it("construction records: import/create/summary/suggest-price/delete", async () => {
     const admin = { "Content-Type": "application/json", "X-Admin-Key": process.env.ADMIN_API_KEY! };
     const itemRes = await get("/api/items?category=MATERIAL_PRICE");
-    const item = itemRes.body.data.items.find((i: { item_code: string }) => i.item_code === "STEEL_H");
+    const item = itemRes.body.data.items.find((i: { item_code: string }) => i.item_code === "REBAR_SD");
+    const regionsRes = await get("/api/regions");
+    const region = regionsRes.body.data.regions.find((r: { region_code: string }) => r.region_code === "JP-02");
     const created = await get("/api/construction-records", {
       method: "POST",
       headers: admin,
-      body: JSON.stringify({ item_id: item.id, work_date: "2026-07-15", quantity: 10, amount: 1200000, unit: "t", source_note: "スモーク実績" }),
+      body: JSON.stringify({
+        item_id: item.id,
+        region_id: region.id,
+        work_date: "2026-07-15",
+        quantity: 10,
+        amount: 1200000,
+        unit: "t",
+        source_note: "スモーク実績",
+      }),
     });
     expect(created.status).toBe(201);
     const recordId = created.body.data.record_id;
-    const list = await get(`/api/construction-records?item_id=${item.id}`);
+    const list = await get(`/api/construction-records?item_id=${item.id}&region_id=${region.id}`);
     expect(list.status).toBe(200);
     expect(list.body.data.records.length).toBeGreaterThan(0);
-    const summary = await get(`/api/construction-records/summary?item_id=${item.id}`);
+    const summary = await get(`/api/construction-records/summary?item_id=${item.id}&region_id=${region.id}`);
     expect(summary.status).toBe(200);
     expect(Number(summary.body.data.summary[0].median_unit_price)).toBe(120000);
     const suggested = await get("/api/construction-records/suggest-price", {
       method: "POST",
       headers: admin,
-      body: JSON.stringify({ item_id: item.id }),
+      body: JSON.stringify({ item_id: item.id, region_id: region.id }),
     });
     expect(suggested.status).toBe(201);
     const pvId = suggested.body.data.result.price_version_id;

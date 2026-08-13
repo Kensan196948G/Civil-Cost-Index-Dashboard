@@ -145,6 +145,7 @@ export type EstimateDetail = {
   base_name: string;
   name: string;
   status: string;
+  revision: number;
   direct_cost: number;
   common_temp_cost: number;
   site_management_cost: number;
@@ -152,12 +153,22 @@ export type EstimateDetail = {
   subtotal: number;
   tax_amount: number;
   total: number;
+  price_version_id: string | null;
+  snapshot_sha256: string | null;
+  created_by: string;
+  created_at: string;
+  submitted_by: string | null;
+  submitted_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  superseded_by: string | null;
+  superseded_by_actor: string | null;
   rounding_rule_json: Record<string, string>;
   warnings: string[];
   port_options: PortOptions | null;
   port_extras: ReturnType<typeof computeEstimate>["port_extras"];
-  created_by: string;
-  created_at: string;
   lines: EstimateLineRow[];
   materials: EstimateMaterialRow[];
 };
@@ -171,6 +182,7 @@ export type EstimateListRow = {
   base_name: string;
   name: string;
   status: string;
+  revision: number;
   direct_cost: number;
   common_temp_cost: number;
   site_management_cost: number;
@@ -178,8 +190,18 @@ export type EstimateListRow = {
   subtotal: number;
   tax_amount: number;
   total: number;
+  price_version_id: string | null;
+  snapshot_sha256: string | null;
   created_by: string;
   created_at: string;
+  submitted_by: string | null;
+  submitted_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  superseded_by: string | null;
+  superseded_by_actor: string | null;
 };
 
 // ---- 積算基準 ----
@@ -801,6 +823,7 @@ export async function calculateEstimate(
       shift_machinery_surcharge: shift.shift_machinery_surcharge,
     };
   }
+  const vessels = base.category === "port" ? await loadVesselsMap(sql) : undefined;
   const result = computeEstimate({
     quantities: quantities.map((q) => ({
       tree_id: String(q.tree_id),
@@ -814,7 +837,7 @@ export async function calculateEstimate(
     rates,
     rounding: base.rounding_rules,
     taxRate: 0.1,
-    vessels: base.category === "port" ? await loadVesselsMap(sql) : undefined,
+    vessels,
     port: port ?? undefined,
   });
 
@@ -853,6 +876,16 @@ export async function calculateEstimate(
       condition_json: b.condition_json,
     })),
     price_version_id: priceVersionId ?? null,
+    vessels: vessels
+      ? [...vessels.entries()].map(([code, v]) => ({
+          code,
+          capacity: v.capacity,
+          availability_factor: v.availability_factor,
+          mobilization_days: v.mobilization_days,
+          standby_rate: v.standby_rate,
+          hire_rate_per_day: v.hire_rate_per_day,
+        }))
+      : null,
     port: port
       ? {
           operation_rate: port.operation_rate,
@@ -928,8 +961,11 @@ export async function listEstimates(sql: Sql, projectId?: string): Promise<Estim
   const rows = (projectId
     ? await sql`
         SELECT e.id, e.project_id, p.name AS project_name, e.base_id, b.base_code, b.base_name,
-               e.name, e.status, e.direct_cost, e.common_temp_cost, e.site_management_cost,
-               e.general_management_cost, e.subtotal, e.tax_amount, e.total, e.created_by,
+               e.name, e.status, e.revision, e.direct_cost, e.common_temp_cost, e.site_management_cost,
+               e.general_management_cost, e.subtotal, e.tax_amount, e.total,
+               e.price_version_id, e.snapshot_sha256, e.created_by,
+               e.submitted_by, e.submitted_at, e.approved_by, e.approved_at,
+               e.confirmed_by, e.confirmed_at, e.superseded_by, e.superseded_by_actor,
                to_char(e.created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS created_at
         FROM estimate_headers e
         JOIN projects p ON p.id = e.project_id
@@ -939,8 +975,11 @@ export async function listEstimates(sql: Sql, projectId?: string): Promise<Estim
       `
     : await sql`
         SELECT e.id, e.project_id, p.name AS project_name, e.base_id, b.base_code, b.base_name,
-               e.name, e.status, e.direct_cost, e.common_temp_cost, e.site_management_cost,
-               e.general_management_cost, e.subtotal, e.tax_amount, e.total, e.created_by,
+               e.name, e.status, e.revision, e.direct_cost, e.common_temp_cost, e.site_management_cost,
+               e.general_management_cost, e.subtotal, e.tax_amount, e.total,
+               e.price_version_id, e.snapshot_sha256, e.created_by,
+               e.submitted_by, e.submitted_at, e.approved_by, e.approved_at,
+               e.confirmed_by, e.confirmed_at, e.superseded_by, e.superseded_by_actor,
                to_char(e.created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS created_at
         FROM estimate_headers e
         JOIN projects p ON p.id = e.project_id
@@ -962,9 +1001,12 @@ export async function listEstimates(sql: Sql, projectId?: string): Promise<Estim
 export async function getEstimate(sql: Sql, id: string): Promise<EstimateDetail | null> {
   const [header] = (await sql`
     SELECT e.id, e.project_id, p.name AS project_name, e.base_id, b.base_code, b.base_name,
-           e.name, e.status, e.direct_cost, e.common_temp_cost, e.site_management_cost,
+           e.name, e.status, e.revision, e.direct_cost, e.common_temp_cost, e.site_management_cost,
            e.general_management_cost, e.subtotal, e.tax_amount, e.total,
-           e.rounding_rule_json, e.warnings, e.port_options, e.port_extras, e.created_by,
+           e.price_version_id, e.snapshot_sha256, e.created_by,
+           e.submitted_by, e.submitted_at, e.approved_by, e.approved_at,
+           e.confirmed_by, e.confirmed_at, e.superseded_by, e.superseded_by_actor,
+           e.rounding_rule_json, e.warnings, e.port_options, e.port_extras,
            to_char(e.created_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS created_at
     FROM estimate_headers e
     JOIN projects p ON p.id = e.project_id
@@ -1032,7 +1074,7 @@ async function loadVesselsMap(sql: Sql): Promise<Map<string, VesselInfo>> {
   );
 }
 
-export async function confirmEstimate(sql: Sql, id: string, identity: Identity) {
+async function requireEstimateStatus(sql: Sql, id: string, allowed: string[]): Promise<{ id: string; status: string }> {
   const [row] = await sql`
     SELECT status FROM estimate_headers WHERE id = ${id}
   `;
@@ -1041,30 +1083,88 @@ export async function confirmEstimate(sql: Sql, id: string, identity: Identity) 
     (err as Error & { status?: number }).status = 404;
     throw err;
   }
-  if (String(row.status) === "confirmed") {
-    const err = new Error("この積算は既に確定済みです。");
+  const status = String(row.status);
+  if (!allowed.includes(status)) {
+    const err = new Error(`この積算は現在「${status}」のため操作できません。`);
     (err as Error & { status?: number }).status = 409;
     throw err;
   }
+  return { id, status };
+}
+
+/** 積算担当者が確認依頼へ提出（draft → review） */
+export async function submitEstimate(sql: Sql, id: string, identity: Identity) {
+  await requireEstimateStatus(sql, id, ["draft"]);
   const [updated] = await sql`
     UPDATE estimate_headers
-    SET status = 'confirmed', confirmed_by = ${identity.email}, confirmed_at = now(), updated_at = now()
+    SET status = 'review', submitted_by = ${identity.email}, submitted_at = now(), updated_at = now()
     WHERE id = ${id}
     RETURNING id
   `;
   return updated ?? null;
 }
 
-export async function deleteEstimate(sql: Sql, id: string) {
-  const [row] = await sql`
-    SELECT status FROM estimate_headers WHERE id = ${id}
+/** 積算責任者・管理者が承認（draft / review / confirmed → approved） */
+export async function approveEstimate(sql: Sql, id: string, identity: Identity) {
+  await requireEstimateStatus(sql, id, ["draft", "review", "confirmed"]);
+  const [updated] = await sql`
+    UPDATE estimate_headers
+    SET status = 'approved',
+        confirmed_by = ${identity.email}, confirmed_at = now(),
+        approved_by = ${identity.email}, approved_at = now(),
+        updated_at = now()
+    WHERE id = ${id}
+    RETURNING id
   `;
-  if (!row) return null;
-  if (String(row.status) === "confirmed") {
-    const err = new Error("確定済みの積算は削除できません。変更積算として新規作成してください。");
+  return updated ?? null;
+}
+
+/** 確認依頼を差し戻し（review → draft） */
+export async function rejectEstimate(sql: Sql, id: string, identity: Identity) {
+  await requireEstimateStatus(sql, id, ["review"]);
+  const [updated] = await sql`
+    UPDATE estimate_headers
+    SET status = 'draft', submitted_by = NULL, submitted_at = NULL,
+        rejected_by = ${identity.email}, rejected_at = now(), updated_at = now()
+    WHERE id = ${id}
+    RETURNING id
+  `;
+  return updated ?? null;
+}
+
+/** 承認済み積算を変更積算（新規draft）で置き換え（approved → superseded） */
+export async function supersedeEstimate(sql: Sql, id: string, supersedingId: string, identity: Identity) {
+  await requireEstimateStatus(sql, id, ["approved", "confirmed"]);
+  const [target] = await sql`
+    SELECT id FROM estimate_headers WHERE id = ${supersedingId}
+  `;
+  if (!target) {
+    const err = new Error("後継の変更積算が見つかりません。");
+    (err as Error & { status?: number }).status = 404;
+    throw err;
+  }
+  if (supersedingId === id) {
+    const err = new Error("後継積算は自分自身にできません。");
     (err as Error & { status?: number }).status = 409;
     throw err;
   }
+  const [updated] = await sql`
+    UPDATE estimate_headers
+    SET status = 'superseded', superseded_by = ${supersedingId},
+        superseded_by_actor = ${identity.email}, superseded_at = now(), updated_at = now()
+    WHERE id = ${id}
+    RETURNING id
+  `;
+  return updated ?? null;
+}
+
+/** 後方互換: 旧confirmは approve と同じ確定処理を行う */
+export async function confirmEstimate(sql: Sql, id: string, identity: Identity) {
+  return approveEstimate(sql, id, identity);
+}
+
+export async function deleteEstimate(sql: Sql, id: string) {
+  await requireEstimateStatus(sql, id, ["draft"]);
   const [deleted] = await sql`
     DELETE FROM estimate_headers WHERE id = ${id} RETURNING id
   `;

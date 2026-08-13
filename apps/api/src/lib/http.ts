@@ -49,6 +49,41 @@ export async function requestIdMiddleware(c: AppContext, next: Next) {
   await next();
 }
 
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+export async function securityHeadersMiddleware(c: AppContext, next: Next): Promise<Response | void> {
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  await next();
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+}
+
+export async function rateLimitMiddleware(c: AppContext, next: Next): Promise<Response | void> {
+  if (c.req.method === "OPTIONS" || c.req.path.startsWith("/api/health/")) return next();
+  const limit = Number(c.env.RATE_LIMIT_PER_MINUTE || "180");
+  if (!Number.isFinite(limit) || limit <= 0) return next();
+
+  const now = Date.now();
+  const forwarded = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "";
+  const key = forwarded.split(",")[0].trim() || "local";
+  const current = rateBuckets.get(key);
+  if (!current || current.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + 60_000 });
+    return next();
+  }
+  current.count += 1;
+  if (current.count > limit) {
+    c.header("Retry-After", String(Math.max(1, Math.ceil((current.resetAt - now) / 1000))));
+    return fail(c, "RATE_LIMITED", "短時間のリクエスト数が上限を超えました。時間を置いて再試行してください。", 429);
+  }
+  return next();
+}
+
 export async function basicAuthMiddleware(c: AppContext, next: Next): Promise<Response | void> {
   // 死活監視用ヘルスチェックは認証対象外（ヘルスチェックは資格情報を送信できないため）
   if (c.req.path.startsWith("/api/health/")) return next();

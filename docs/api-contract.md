@@ -15,6 +15,11 @@ Error:
 ```
 
 Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTERNAL_ERROR`.
+Additional MVP runtime behavior:
+
+- Protected endpoints require a viewer or stronger role unless `ALLOW_ANONYMOUS_VIEWER=true` is explicitly set for a demo environment.
+- API responses include `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and a restrictive `Permissions-Policy`.
+- `RATE_LIMIT_PER_MINUTE` applies an in-memory IP-based per-minute request cap in the API runtime. Exceeding it returns `429 RATE_LIMITED`.
 
 ## Endpoints
 
@@ -61,6 +66,11 @@ Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `UNAUTHORIZED`, `INTER
 | GET | `/api/estimates` | 積算結果一覧（`project_id` 任意） |
 | GET | `/api/estimates/{id}` | 積算結果詳細（総括・内訳・単価表） |
 | GET | `/api/estimates/{id}/export` | 積算書Excel（総括表/内訳/単価表） |
+| POST | `/api/estimates/{id}/submit` | 確認依頼へ提出（draft → review） |
+| POST | `/api/estimates/{id}/approve` | 承認・確定（draft/review/confirmed → approved） |
+| POST | `/api/estimates/{id}/reject` | 確認依頼を差し戻し（review → draft） |
+| POST | `/api/estimates/{id}/supersede` | 変更積算で置き換え（approved/confirmed → superseded、`superseding_id` 必須） |
+| POST | `/api/estimates/{id}/confirm` | 旧API: 承認・確定（approve と同等） |
 | DELETE | `/api/estimates/{id}` | 積算結果削除 |
 | POST | `/api/ai/breakdown-suggest` | AI歩掛選定候補（要承認・金額は計算しない） |
 | POST | `/api/vessels/import` | 船舶マスタ一括取込（CSV/Excel・正式係数データ投入） |

@@ -119,3 +119,104 @@ CodeQL（code scanning）の有効化条件:
 - 根拠・出典欠損0件 / 未解決の違算防止ブロッカー0件
 - 同一入力からの再計算一致率100%（本対応のスナップショットで検証可能に）
 - 承認者・変更履歴・使用基準の追跡率100%
+
+## 6. 追加精査（同日・第2パス: 認証全ルート・二段階承認・再現性補強）
+
+上記P0対応（コミット `5403826`）をコード・本番DB・実測で再精査し、以下を追加対応した。
+
+### 6.1 認証境界は評価の指摘より広かった（追加発見・修正済み）
+
+前回は `/api/projects` `/api/estimates` `/api/audit/operations` を確認したが、ルート網羅点検の結果、
+市場データ系・エクスポート系・AI系の多数エンドポイントが **未認証のまま** だった（Worker直URLで取得可能）。
+
+対象（すべて viewer 以上を必須に変更）:
+
+- 市場データ: `/api/regions` `/api/items` `/api/timeseries` `/api/compare` `/api/alerts` `/api/dashboard/summary`
+- データ管理: `/api/data-sources`（GET/POST/PATCH） `/api/fetch-jobs`（GET） `/api/uploads`
+- 出力: `/api/export/csv|xlsx|pdf|pptx|estimate-link` `/api/export/report`
+- AI: `/api/ai/status` `/api/ai/templates` `/api/ai/summary` `/api/ai/alerts/explain` `/api/ai/report` `/api/ai/quality` `/api/ai/feedback`
+
+ヘルスチェック（`/api/health/*`）と `/api/auth/me`（ログイン状態判定）は意図的に認証対象外のまま。
+デモ環境（`ALLOW_ANONYMOUS_VIEWER=true`）では従来どおり匿名viewerで全機能が利用できる。
+
+### 6.2 積算の二段階承認フローを実装（P0 の残り）
+
+migration `019_estimate_approval_flow.sql`（本番DB適用済み・非破壊）:
+
+- `revision` / `submitted_by` `submitted_at` / `approved_by` `approved_at` /
+  `rejected_by` `rejected_at` / `superseded_by`（後継ID） `superseded_by_actor` `superseded_at` を追加
+
+API:
+
+| 操作 | 遷移 | 権限 |
+| --- | --- | --- |
+| `POST /api/estimates/:id/submit` | draft → review | estimator / estimating_manager / system_admin |
+| `POST /api/estimates/:id/approve` | draft / review / confirmed → approved | estimating_manager / system_admin |
+| `POST /api/estimates/:id/reject` | review → draft | estimating_manager / system_admin |
+| `POST /api/estimates/:id/supersede` | approved / confirmed → superseded | estimating_manager / system_admin |
+
+削除は **draft のみ許可**（review / approved / confirmed / superseded は 409）。
+旧 `POST /api/estimates/:id/confirm` は `approve` と同等の後方互換エンドポイントとして維持。
+Web UI（`/estimates`）にステータスバッジと「確認依頼へ提出／承認・確定／差し戻し」ボタンを追加。
+
+### 6.3 再現性スナップショットの補強
+
+- 港湾計算で参照する **作業船マスタ（vessels）一式** をスナップショットに追加
+  （船舶損料・供用係数・回航日数・待機率・日額が後から変わっても再現可能に）
+- 一覧・詳細APIに `snapshot_sha256` `price_version_id` `revision` および承認者・確定・後継情報を公開
+
+### 6.4 state.json の復元
+
+`.opencode/goals/state.json` に、フェーズ（P0→P1）、週（W1）、期限（2027-02-09）、
+タスク（P0 4件・P1 2件）を記録して復元した。本ファイルは `.gitignore` 対象のローカル状態ファイル
+（`docs/evaluation-response-2026-08-09.md` が追跡可能な正本）。
+
+### 6.5 検証結果（2026-08-09 第2パス）
+
+| 項目 | 結果 |
+| --- | --- |
+| API lint / typecheck | ✅ クリーン |
+| API unit テスト | ✅ 全パス（auth 8件含む） |
+| API スモーク（本番DB） | ✅ 44件全パス（認証境界の全エンドポイント・二段階承認フロー・supersede・削除禁止を含む） |
+| migration 019 | ✅ 本番DB適用済み |
+| Web lint / typecheck / test | ✅ クリーン（依存を npm ci で復元して検証） |
+| Web build | ⚠️ ローカル（本サンドボックス）では仮想メモリ上限20GBと実行可能メモリ制約により Wasm 生成が失敗。CI（ubuntu-latest / Node 22 / npm ci）では成功実績あり（main 直近5回すべて success を確認）。`outputFileTracingRoot` を追加して workspace 誤検出は解消済み |
+| npm audit（Web） | ✅ 0件（js-yaml 4.3.1 / nanoid 3.3.17 へ更新） |
+
+### 6.6 残課題（外部要因・継続項目）
+
+- 正式積算データ（歩掛・施工パッケージ・機労材構成比・地域単価・諸経費率・出典情報）の整備は
+  ライセンス・データ供給契約が前提で、コードだけでは解決しない
+- 計算エンジン正式化（経費対象額区分・率/積上げ併用・再帰代価・点在工事・週休2日補正・価格帯補間）は
+  基準データとセットで実装する
+- `draft → review → approved → superseded` の第一段は完了。revision の自動採番（変更積算の clone 生成）は
+  正式データ整備と並行して実装する
+- GitHub: Secret scanning / push protection は Web UI での手動有効化が必要（無料プラン制約）
+
+### 6.7 Web build がローカルで失敗する原因と運用方針
+
+**原因（調査済み）**: `next build` は起動時・コンパイル中に複数の WebAssembly モジュールを生成する。
+本サンドボックスの仮想メモリ上限（`ulimit -v` 20GB、ハードリミット変更不可）と実行可能メモリ制約により、
+これら Wasm インスタンスの生成が `Out of memory` で失敗する。該当箇所は以下のとおり。
+
+1. Next telemetry が起動時に `@edge-runtime/primitives`（llhttp wasm）を読み込む
+   （`next/dist/telemetry/storage.js` → `@edge-runtime/ponyfill`）
+2. webpack のハッシュ関数 `xxhash64` / `md4` が Wasm 実装
+   （`next/dist/compiled/webpack/bundle5.js` の WasmHash）
+3. Next がサーバーコンパイルに設定する `devtool: "source-map"` が
+   SourceMapDevToolPlugin 経由でハードコードされた `xxhash64` Wasm を起動
+4. `copy-file-plugin` が `loader-utils3` の Wasm ハッシュ（既定 `xxhash64`）を使用
+
+いずれも GitHub Actions（ubuntu-latest）では仮想メモリ制約が無いため成功する。
+`hashFunction` 変更・source-map 無効化・ワーカー無効化・V8フラグ縮小を試したが、
+次々に別の Wasm ハッシュモジュールが出現するため、node_modules パッチなしでの
+完全回避は現実的でない（Next 内部の多数モジュールを改変するため本番挙動を変えるリスクがある）。
+
+**運用方針**:
+
+- **Web build の検証は CI（GitHub Actions）を正とする**。ローカルでは lint / typecheck / test を実施し、
+  build は `npm run build` が通る CI に委ねる（main 直近の CI はすべて success）。
+- ローカルで build が必要な場合は、制約のない環境（通常の開発機 / Docker build /
+  GitHub Actions）で `npm ci && npm run build` を実行する。
+- `outputFileTracingRoot` は workspace 誤検出の是正として有効な変更なので維持する。
+- npm audit（Web）は 0件、依存は `npm ci` でクリーンに復元済み（評価指摘の「依存実行ファイル欠落」は解消）。

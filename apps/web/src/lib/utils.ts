@@ -49,7 +49,8 @@ export async function downloadCsv(url: string, filename: string): Promise<void> 
 }
 
 export async function downloadFile(url: string, filename: string, label = "ファイル"): Promise<void> {
-  const res = await fetch(url);
+  const adminKey = loadPrefs().adminKey;
+  const res = await fetch(url, adminKey ? { headers: { "X-Admin-Key": adminKey } } : undefined);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${label}ダウンロードに失敗しました (${res.status})${text ? `: ${text}` : ""}`);

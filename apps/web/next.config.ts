@@ -5,6 +5,9 @@ const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 const nextConfig: NextConfig = {
   output: staticExport ? "export" : "standalone",
   trailingSlash: staticExport ? true : false,
+  // ワークスペースルート誤検出（ホーム直下の package-lock.json を参照）を防ぎ、
+  // ビルド時のトレース範囲をこのアプリに限定する
+  outputFileTracingRoot: __dirname,
   images: { unoptimized: true },
   reactStrictMode: true,
   experimental: { cpus: 1 },

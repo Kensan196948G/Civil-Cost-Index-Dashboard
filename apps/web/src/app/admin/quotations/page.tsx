@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
-import { loadPrefs, formatNumber, formatDateTime } from "@/lib/utils";
+import { loadPrefs, formatNumber, formatDateTime, downloadFile } from "@/lib/utils";
 import type { Item, ProjectSummary, QuotationDetail, QuotationReviewResult, QuotationSummary } from "@/types/api";
 
 export default function QuotationsPage() {
@@ -208,9 +208,9 @@ export default function QuotationsPage() {
                     <h2 className="text-base font-semibold">見積比較（{detail.supplier_name}）</h2>
                     <div className="flex gap-2">
                       <button onClick={() => void runReview()} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50">AI査定コメント</button>
-                      <a href={api.quotationExportUrl(detail.id)} download={`cci-quotation-${detail.id.slice(0, 8)}.xlsx`} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                      <button onClick={() => void downloadFile(api.quotationExportUrl(detail.id), `cci-quotation-${detail.id.slice(0, 8)}.xlsx`, "見積比較Excel")} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
                         見積比較Excel出力
-                      </a>
+                      </button>
                     </div>
                   </div>
                   <table className="w-full text-xs">

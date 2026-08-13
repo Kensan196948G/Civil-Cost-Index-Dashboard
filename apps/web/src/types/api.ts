@@ -642,6 +642,7 @@ export interface EstimateSummary {
   base_name: string;
   name: string;
   status: string;
+  revision: number;
   direct_cost: number;
   common_temp_cost: number;
   site_management_cost: number;
@@ -649,8 +650,18 @@ export interface EstimateSummary {
   subtotal: number;
   tax_amount: number;
   total: number;
+  price_version_id: string | null;
+  snapshot_sha256: string | null;
   created_by: string;
   created_at: string;
+  submitted_by: string | null;
+  submitted_at: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  superseded_by: string | null;
+  superseded_by_actor: string | null;
 }
 
 export interface EstimateLine {

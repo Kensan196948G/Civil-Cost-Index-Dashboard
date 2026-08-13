@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ErrorMessage, LoadingState } from "@/components/Status";
+import { EmptyState, ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
-import { loadPrefs, formatNumber } from "@/lib/utils";
+import { loadPrefs, formatNumber, downloadFile } from "@/lib/utils";
 import type { DataSource, Item, PriceSnapshot, PriceVersion, Region } from "@/types/api";
 
 const STATUS_LABEL: Record<string, string> = { draft: "下書き", approved: "承認済み", retired: "失効" };
@@ -169,6 +169,9 @@ export default function PriceVersionsPage() {
             {adminKey ? null : (
               <p className="mb-2 text-xs text-amber-700">承認・作成には X-Admin-Key が必要です（ユーザー設定で保存）。</p>
             )}
+            {versions.length === 0 && snapshots.length === 0 ? (
+              <EmptyState label="単価版が登録されていません" />
+            ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-xs text-gray-600">
@@ -210,6 +213,7 @@ export default function PriceVersionsPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -268,13 +272,12 @@ export default function PriceVersionsPage() {
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-base font-semibold">スナップショット（積算時点の単価固定）</h2>
-                <a
-                  href={api.estimateLinkExportUrl(selectedSnapshot?.id)}
-                  download="cci-estimate-link.xlsx"
+                <button
+                  onClick={() => void downloadFile(api.estimateLinkExportUrl(selectedSnapshot?.id), "cci-estimate-link.xlsx", "積算連携Excel")}
                   className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
                 >
                   積算連携Excel出力
-                </a>
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

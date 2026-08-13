@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ErrorMessage, LoadingState } from "@/components/Status";
+import { EmptyState, ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
 import type { DataSource, DataSourceInput } from "@/types/api";
@@ -167,6 +167,9 @@ export default function DataSourcesPage() {
         <>
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-2 text-base font-semibold">データソース一覧</h2>
+            {sources.length === 0 ? (
+              <EmptyState label="データソースが登録されていません" />
+            ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-xs text-gray-600">
@@ -233,6 +236,7 @@ export default function DataSourcesPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-1 text-base font-semibold">公式データソースを登録</h2>

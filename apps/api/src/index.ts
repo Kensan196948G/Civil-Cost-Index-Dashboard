@@ -6,8 +6,10 @@ import {
   corsMiddleware,
   fail,
   ok,
+  rateLimitMiddleware,
   requireAdmin,
   requestIdMiddleware,
+  securityHeadersMiddleware,
   type AppContext,
 } from "./lib/http";
 import { getSql } from "./lib/db";
@@ -128,6 +130,10 @@ import {
   calculateEstimate,
   listEstimates,
   getEstimate,
+  submitEstimate,
+  approveEstimate,
+  rejectEstimate,
+  supersedeEstimate,
   confirmEstimate,
   deleteEstimate,
   aiSuggestBreakdowns,
@@ -196,6 +202,8 @@ function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
 }
 
 app.use("*", requestIdMiddleware);
+app.use("*", securityHeadersMiddleware);
+app.use("*", rateLimitMiddleware);
 app.use("*", basicAuthMiddleware);
 app.use("*", corsMiddleware);
 
@@ -235,7 +243,7 @@ function errorStatus(e: unknown): number {
 async function handleError(c: AppContext, e: unknown) {
   const status = errorStatus(e);
   if (status === 400) return fail(c, "VALIDATION_ERROR", (e as Error).message, 400);
-  if (status === 401) return fail(c, "UNAUTHORIZED", "管理者キーが無効です。", 401);
+  if (status === 401) return fail(c, "UNAUTHORIZED", (e as Error).message || "認証が必要です。", 401);
   if (status === 403) return fail(c, "FORBIDDEN", (e as Error).message, 403);
   if (status === 404) return fail(c, "NOT_FOUND", (e as Error).message, 404);
   if (status === 409) return fail(c, "CONFLICT", (e as Error).message, 409);
@@ -268,6 +276,7 @@ app.get("/api/health/ready", async (c) => {
 // Masters
 app.get("/api/regions", async (c) => {
   const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   return ok(c, { regions: await listRegions(sql) });
 });
 
@@ -277,6 +286,7 @@ app.get("/api/items", async (c) => {
     return fail(c, "VALIDATION_ERROR", `category は ${CATEGORIES.join("/")} のいずれかを指定してください。`, 400);
   }
   const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   return ok(c, { items: await listItems(sql, category) });
 });
 
@@ -297,11 +307,12 @@ app.get("/api/timeseries", async (c) => {
   if (!parsed.success) {
     return fail(c, "VALIDATION_ERROR", "パラメータが不正です。", 400, parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
   }
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   try {
     const start = validatePeriod(parsed.data.start_period, "start_period");
     const end = validatePeriod(parsed.data.end_period, "end_period");
     const base = validatePeriod(parsed.data.base_period, "base_period");
-    const sql = getSql(c.env);
     const result = await buildTimeseries(sql, {
       dataType: parsed.data.data_type,
       itemIds: parseCsvList(parsed.data.item_ids),
@@ -338,11 +349,12 @@ app.get("/api/compare", async (c) => {
     }
     parsedTokens.push({ dataType: parts[0], itemCode: parts[1], regionCode: parts[2] });
   }
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   try {
     const start = validatePeriod(c.req.query("start_period"), "start_period");
     const end = validatePeriod(c.req.query("end_period"), "end_period");
     const base = validatePeriod(c.req.query("base_period"), "base_period");
-    const sql = getSql(c.env);
     const dataTypes = [...new Set(parsedTokens.map((t) => t.dataType))];
     const itemCodes = [...new Set(parsedTokens.map((t) => t.itemCode))];
     const regionCodes = [...new Set(parsedTokens.map((t) => t.regionCode))];
@@ -380,18 +392,20 @@ app.get("/api/alerts", async (c) => {
     return fail(c, "VALIDATION_ERROR", "threshold/limit の値が不正です。", 400);
   }
   const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   return ok(c, { alerts: await listAlerts(sql, thresholdMom, thresholdYoy, Math.floor(limit)) });
 });
 
 // Dashboard summary
 app.get("/api/dashboard/summary", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   try {
     const base = validatePeriod(c.req.query("base_period"), "base_period");
     const period = c.req.query("period");
     if (period && !["latest", "1y", "3y", "5y"].includes(period)) {
       return fail(c, "VALIDATION_ERROR", "period は latest / 1y / 3y / 5y のいずれかを指定してください。", 400);
     }
-    const sql = getSql(c.env);
     const summary = await getDashboardSummary(sql, {
       regionId: c.req.query("region_id") ?? undefined,
       basePeriod: base,
@@ -406,11 +420,13 @@ app.get("/api/dashboard/summary", async (c) => {
 // Data sources
 app.get("/api/data-sources", async (c) => {
   const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   return ok(c, { data_sources: await listDataSources(sql) });
 });
 
 app.post("/api/data-sources", async (c) => {
-  if (!requireAdmin(c)) return fail(c, "UNAUTHORIZED", "管理者キーが必要です。", 401);
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["data_ingester", "data_approver", "system_admin"]);
   let body: unknown;
   try {
     body = await c.req.json();
@@ -422,7 +438,6 @@ app.post("/api/data-sources", async (c) => {
     return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
   }
   try {
-    const sql = getSql(c.env);
     const created = await createDataSource(sql, parsed.data);
     return ok(c, created, 201);
   } catch (e) {
@@ -431,7 +446,8 @@ app.post("/api/data-sources", async (c) => {
 });
 
 app.patch("/api/data-sources/:id", async (c) => {
-  if (!requireAdmin(c)) return fail(c, "UNAUTHORIZED", "管理者キーが必要です。", 401);
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["data_ingester", "data_approver", "system_admin"]);
   const id = c.req.param("id");
   let body: unknown;
   try {
@@ -444,7 +460,6 @@ app.patch("/api/data-sources/:id", async (c) => {
     return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
   }
   try {
-    const sql = getSql(c.env);
     const updated = await updateDataSource(sql, id, parsed.data);
     if (!updated) return fail(c, "NOT_FOUND", "データソースが見つかりません。", 404);
     return ok(c, updated);
@@ -461,6 +476,7 @@ app.get("/api/fetch-jobs", async (c) => {
   }
   try {
     const sql = getSql(c.env);
+    await requireRole(c, sql, ["viewer"]);
     return ok(c, { fetch_jobs: await listFetchJobs(sql, { status: c.req.query("status"), limit: Math.floor(limit) }) });
   } catch (e) {
     return handleError(c, e);
@@ -498,7 +514,8 @@ app.post("/api/fetch-jobs", async (c) => {
 
 // Uploads
 app.post("/api/uploads", async (c) => {
-  if (!requireAdmin(c)) return fail(c, "UNAUTHORIZED", "管理者キーが必要です。", 401);
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["data_ingester", "data_approver", "system_admin"]);
   let form: FormData;
   try {
     form = await c.req.formData();
@@ -514,7 +531,6 @@ app.post("/api/uploads", async (c) => {
     return fail(c, "VALIDATION_ERROR", "data_source_id が必要です。", 400);
   }
   try {
-    const sql = getSql(c.env);
     const result = await handleUpload(sql, {
       fileName: file.name,
       buffer: await file.arrayBuffer(),
@@ -538,6 +554,7 @@ app.get("/api/export/csv", async (c) => {
     const end = validatePeriod(parsed.data.end_period, "end_period");
     const base = validatePeriod(parsed.data.base_period, "base_period");
     const sql = getSql(c.env);
+    await requireRole(c, sql, ["viewer"]);
     const csv = await buildCsvExport(sql, {
       dataType: parsed.data.data_type,
       itemIds: parseCsvList(parsed.data.item_ids),
@@ -568,6 +585,7 @@ app.get("/api/export/xlsx", async (c) => {
     const end = validatePeriod(parsed.data.end_period, "end_period");
     const base = validatePeriod(parsed.data.base_period, "base_period");
     const sql = getSql(c.env);
+    await requireRole(c, sql, ["viewer"]);
     const buffer = await buildXlsxExport(sql, {
       dataType: parsed.data.data_type,
       itemIds: parseCsvList(parsed.data.item_ids),
@@ -590,6 +608,7 @@ app.get("/api/export/xlsx", async (c) => {
 app.get("/api/export/estimate-link", async (c) => {
   try {
     const sql = getSql(c.env);
+    await requireRole(c, sql, ["viewer"]);
     const buffer = await buildEstimateLinkXlsx(sql, { snapshot_id: c.req.query("snapshot_id") ?? null });
     return c.body(buffer, 200, {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -612,6 +631,7 @@ app.get("/api/export/pptx", async (c) => {
     const end = validatePeriod(parsed.data.end_period, "end_period");
     const base = validatePeriod(parsed.data.base_period, "base_period");
     const sql = getSql(c.env);
+    await requireRole(c, sql, ["viewer"]);
     const buffer = await buildPptxExport(sql, {
       dataType: parsed.data.data_type,
       itemIds: parseCsvList(parsed.data.item_ids),
@@ -642,6 +662,7 @@ app.get("/api/export/pdf", async (c) => {
     const end = validatePeriod(parsed.data.end_period, "end_period");
     const base = validatePeriod(parsed.data.base_period, "base_period");
     const sql = getSql(c.env);
+    await requireRole(c, sql, ["viewer"]);
     const fontBytes = await getCjkFontBytes(c.env);
     const buffer = await buildPdfExport(
       sql,
@@ -1647,6 +1668,62 @@ app.post("/api/estimates/:id/confirm", async (c) => {
   }
 });
 
+app.post("/api/estimates/:id/submit", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimator", "estimating_manager", "system_admin"]);
+  try {
+    const id = await submitEstimate(sql, c.req.param("id"), identity);
+    if (!id) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+    await recordAudit(sql, identity, "estimate.submit", "estimate", String(id));
+    return ok(c, { submitted: true, estimate_id: String(id) });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/estimates/:id/approve", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimating_manager", "system_admin"]);
+  try {
+    const id = await approveEstimate(sql, c.req.param("id"), identity);
+    if (!id) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+    await recordAudit(sql, identity, "estimate.approve", "estimate", String(id));
+    return ok(c, { approved: true, estimate_id: String(id) });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/estimates/:id/reject", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimating_manager", "system_admin"]);
+  try {
+    const id = await rejectEstimate(sql, c.req.param("id"), identity);
+    if (!id) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+    await recordAudit(sql, identity, "estimate.reject", "estimate", String(id));
+    return ok(c, { rejected: true, estimate_id: String(id) });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
+app.post("/api/estimates/:id/supersede", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["estimating_manager", "system_admin"]);
+  const parsed = z
+    .object({ superseding_id: z.string().uuid() })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return fail(c, "VALIDATION_ERROR", "後継の変更積算ID（superseding_id）が必要です。", 400);
+  try {
+    const id = await supersedeEstimate(sql, c.req.param("id"), parsed.data.superseding_id, identity);
+    if (!id) return fail(c, "NOT_FOUND", "積算結果が見つかりません。", 404);
+    await recordAudit(sql, identity, "estimate.supersede", "estimate", String(id), { superseding_id: parsed.data.superseding_id });
+    return ok(c, { superseded: true, estimate_id: String(id), superseding_id: parsed.data.superseding_id });
+  } catch (e) {
+    return handleError(c, e);
+  }
+});
+
 app.delete("/api/estimates/:id", async (c) => {
   const sql = getSql(c.env);
   const identity = await requireRole(c, sql, ESTIMATE_WRITE_ROLES);
@@ -2154,7 +2231,8 @@ app.post("/api/ai/breakdown-suggest", async (c) => {
 // 原則: 集計・計算・アラート判定はコード側、AIは説明・要約のみ。
 // AI未設定でも全エンドポイントがルール生成テキストで動作する。
 
-app.get("/api/ai/status", (c) => {
+app.get("/api/ai/status", async (c) => {
+  await requireRole(c, getSql(c.env), ["viewer"]);
   const info = getAiProviderInfo(c.env);
   return ok(c, {
     ai_enabled: info.provider !== "none",
@@ -2167,11 +2245,16 @@ app.get("/api/ai/status", (c) => {
   });
 });
 
-app.get("/api/ai/templates", (c) => ok(c, { templates: AI_TEMPLATES }));
+app.get("/api/ai/templates", async (c) => {
+  await requireRole(c, getSql(c.env), ["viewer"]);
+  return ok(c, { templates: AI_TEMPLATES });
+});
 
 const AUDIENCES = ["default", "executive", "estimator", "client"];
 
 app.post("/api/ai/summary", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   let body: Record<string, unknown> = {};
   try {
     body = (await c.req.json()) as Record<string, unknown>;
@@ -2184,7 +2267,6 @@ app.post("/api/ai/summary", async (c) => {
   }
   const regionId = typeof body.region_id === "string" && body.region_id ? body.region_id : undefined;
   try {
-    const sql = getSql(c.env);
     const result = await buildMarketSummary(sql, c.env, { regionId, audience: audience as Audience });
     return ok(c, result);
   } catch (e) {
@@ -2193,6 +2275,8 @@ app.post("/api/ai/summary", async (c) => {
 });
 
 app.post("/api/ai/alerts/explain", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   let body: Record<string, unknown> = {};
   try {
     body = (await c.req.json()) as Record<string, unknown>;
@@ -2206,7 +2290,6 @@ app.post("/api/ai/alerts/explain", async (c) => {
     return fail(c, "VALIDATION_ERROR", "threshold/limit の値が不正です。", 400);
   }
   try {
-    const sql = getSql(c.env);
     const result = await explainAlerts(sql, c.env, { thresholdMom, thresholdYoy, limit: Math.floor(limit) });
     return ok(c, result);
   } catch (e) {
@@ -2215,6 +2298,8 @@ app.post("/api/ai/alerts/explain", async (c) => {
 });
 
 app.post("/api/ai/report", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   let body: Record<string, unknown> = {};
   try {
     body = (await c.req.json()) as Record<string, unknown>;
@@ -2227,7 +2312,6 @@ app.post("/api/ai/report", async (c) => {
   }
   const regionId = typeof body.region_id === "string" && body.region_id ? body.region_id : undefined;
   try {
-    const sql = getSql(c.env);
     const result = await generateReport(sql, c.env, { reportType: reportType as ReportType, regionId });
     return ok(c, result);
   } catch (e) {
@@ -2236,8 +2320,9 @@ app.post("/api/ai/report", async (c) => {
 });
 
 app.get("/api/ai/quality", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   try {
-    const sql = getSql(c.env);
     return ok(c, await runQualityChecks(sql));
   } catch (e) {
     return handleError(c, e);
@@ -2245,6 +2330,8 @@ app.get("/api/ai/quality", async (c) => {
 });
 
 app.post("/api/ai/feedback", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   let body: unknown;
   try {
     body = await c.req.json();
@@ -2262,7 +2349,6 @@ app.post("/api/ai/feedback", async (c) => {
     return fail(c, "VALIDATION_ERROR", "入力値が不正です。", 400, parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
   }
   try {
-    const sql = getSql(c.env);
     const updated = await submitAiFeedback(sql, {
       auditId: parsed.data.audit_id,
       rating: parsed.data.rating,
@@ -2332,6 +2418,8 @@ app.post("/api/ai/test-key", async (c) => {
 
 // Report（standalone互換: PDFを生成）
 app.post("/api/export/report", async (c) => {
+  const sql = getSql(c.env);
+  await requireRole(c, sql, ["viewer"]);
   let body: Record<string, unknown> = {};
   try {
     body = (await c.req.json()) as Record<string, unknown>;
@@ -2343,7 +2431,6 @@ app.post("/api/export/report", async (c) => {
   const toNullableString = (v: unknown): string | null =>
     typeof v === "string" && v ? v : null;
   try {
-    const sql = getSql(c.env);
     const fontBytes = await getCjkFontBytes(c.env);
     const buffer = await buildPdfExport(
       sql,

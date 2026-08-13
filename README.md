@@ -486,6 +486,7 @@ cd apps/api
 npm install
 npm run db:migrate   # Neonへスキーマ適用（DATABASE_URL_DIRECT使用）
 npm run db:seed      # サンプルデータ投入（同一ハッシュはスキップ）
+npm run db:seed:demo # MVP確認用の架空案件・見積・積算・監査ログを冪等投入
 npm run dev          # http://localhost:8787
 
 # 3. Web（別ターミナル）
@@ -493,6 +494,33 @@ cd apps/web
 npm install
 NEXT_STATIC_EXPORT=0 npm run dev   # http://localhost:3000
 ```
+
+### MVP / Prototype デモデータ
+
+MVP確認用データはすべて架空値です。`apps/api/scripts/seed-demo.mjs` は `example.invalid`
+メール、`Mirai Demo` 系の架空発注者、架空協力会社、架空案件だけを投入し、実在の個人情報・会社実データ・Secrets は使いません。
+
+```bash
+cd apps/api
+npm run db:migrate
+npm run db:seed
+npm run db:seed:demo
+```
+
+投入後、以下の主要操作を空画面なしで確認できます。
+
+- `/` `/timeseries/` `/compare/` `/table/` `/export/`: 市況KPI、グラフ、表、CSV/XLSX/PDF/PPTX
+- `/projects/`: 架空案件の明細登録・削除・シナリオ試算
+- `/estimates/`: 下書き、確認依頼、承認、差し戻し、失効済み積算、Excel/PDF出力
+- `/admin/quotations/`: 架空協力会社見積の比較、採用理由、Excel出力、AI査定コメント
+- `/admin/change-orders/`: 設計変更差額の登録・削除・Excel出力
+- `/admin/price-versions/`: 承認単価、スナップショット、積算連携Excel
+- `/admin/users/` `/admin/audit/` `/admin/management/`: RBACユーザー、操作監査、経営KPI
+
+認証が必要な開発・評価環境では `/settings/` に `ADMIN_API_KEY` を保存すると、画面上の管理操作と帳票ダウンロードが
+`X-Admin-Key` 付きで実行されます。デモ目的で匿名閲覧を許可する場合のみ `ALLOW_ANONYMOUS_VIEWER=true` を設定してください。
+
+詳細な評価・優先順位・残課題は [docs/mvp-prototype-assessment-2026-08-13.md](docs/mvp-prototype-assessment-2026-08-13.md) を参照してください。
 
 または Docker Compose（本機LAN運用と同じ構成）:
 

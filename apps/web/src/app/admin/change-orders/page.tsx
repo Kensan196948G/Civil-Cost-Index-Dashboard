@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
-import { loadPrefs, formatNumber, formatDateTime } from "@/lib/utils";
+import { loadPrefs, formatNumber, formatDateTime, downloadFile } from "@/lib/utils";
 import type { ChangeOrderDetail, ChangeOrderSummary, EstimationBase, ProjectSummary, WorkTypeTree } from "@/types/api";
 
 export default function ChangeOrdersPage() {
@@ -194,9 +194,9 @@ export default function ChangeOrdersPage() {
                 <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-base font-semibold">差額集計（{detail.name}）</h2>
-                    <a href={api.changeOrderExportUrl(detail.id)} download={`cci-change-order-${detail.id.slice(0, 8)}.xlsx`} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                    <button onClick={() => void downloadFile(api.changeOrderExportUrl(detail.id), `cci-change-order-${detail.id.slice(0, 8)}.xlsx`, "差額表Excel")} className="rounded border border-slate-400 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
                       差額表Excel出力
-                    </a>
+                    </button>
                   </div>
                   <table className="w-full text-sm">
                     <tbody>

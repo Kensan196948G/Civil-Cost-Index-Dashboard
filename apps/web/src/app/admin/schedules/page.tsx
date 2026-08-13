@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ErrorMessage, LoadingState } from "@/components/Status";
+import { EmptyState, ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
 import { loadPrefs, formatDateTime } from "@/lib/utils";
 import type { DataSource, FetchSchedule } from "@/types/api";
@@ -103,6 +103,9 @@ export default function SchedulesPage() {
         <>
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-2 text-base font-semibold">スケジュール一覧</h2>
+            {schedules.length === 0 ? (
+              <EmptyState label="定期取得スケジュールが登録されていません" />
+            ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-xs text-gray-600">
@@ -134,6 +137,7 @@ export default function SchedulesPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-2 text-base font-semibold">新規スケジュール</h2>

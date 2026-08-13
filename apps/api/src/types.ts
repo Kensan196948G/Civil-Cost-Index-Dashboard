@@ -38,6 +38,8 @@ export type Env = {
   AUTH_TRUST_PROXY?: string;
   /** 任意: 未認証アクセスを閲覧者(viewer)として許可する（デモ環境のみ。既定は false = 未認証は401） */
   ALLOW_ANONYMOUS_VIEWER?: string;
+  /** 任意: 1分あたりのIP別リクエスト上限。0以下で無効。 */
+  RATE_LIMIT_PER_MINUTE?: string;
   /** 任意: Teams 受信Webhook URL */
   NOTIFY_TEAMS_URL?: string;
   /** 任意: Slack 受信Webhook URL */

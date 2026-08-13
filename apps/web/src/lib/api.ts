@@ -274,12 +274,24 @@ export const api = {
   estimates: (projectId?: string) =>
     request<{ estimates: EstimateSummary[] }>(`/api/estimates${projectId ? `?project_id=${projectId}` : ""}`),
   estimate: (id: string) => request<{ estimate: EstimateDetail }>(`/api/estimates/${id}`),
-  estimateExportUrl: (id: string) => `/api/estimates/${id}/export`,
-  estimatePdfExportUrl: (id: string) => `/api/estimates/${id}/export.pdf`,
-  managementPdfUrl: () => `/api/reports/management.pdf`,
-  managementPptxUrl: () => `/api/reports/management.pptx`,
+  estimateExportUrl: (id: string) => `${API_BASE}/api/estimates/${id}/export`,
+  estimatePdfExportUrl: (id: string) => `${API_BASE}/api/estimates/${id}/export.pdf`,
+  managementPdfUrl: () => `${API_BASE}/api/reports/management.pdf`,
+  managementPptxUrl: () => `${API_BASE}/api/reports/management.pptx`,
   deleteEstimate: (id: string) =>
     request<{ deleted: boolean }>(`/api/estimates/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  submitEstimate: (id: string) =>
+    request<{ submitted: boolean; estimate_id: string }>(`/api/estimates/${id}/submit`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  approveEstimate: (id: string) =>
+    request<{ approved: boolean; estimate_id: string }>(`/api/estimates/${id}/approve`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  rejectEstimate: (id: string) =>
+    request<{ rejected: boolean; estimate_id: string }>(`/api/estimates/${id}/reject`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() } }),
+  supersedeEstimate: (id: string, supersedingId: string) =>
+    request<{ superseded: boolean; estimate_id: string; superseding_id: string }>(`/api/estimates/${id}/supersede`, {
+      method: "POST",
+      headers: { "X-Admin-Key": adminKeyHeader() },
+      body: JSON.stringify({ superseding_id: supersedingId }),
+    }),
   aiBreakdownSuggest: (input: { project_id: string; base_id: string }) =>
     request<{ suggestion: BreakdownSuggestion }>("/api/ai/breakdown-suggest", { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   changeOrders: (projectId?: string) =>
@@ -303,7 +315,7 @@ export const api = {
     request<{ line_id: string }>(`/api/change-orders/${id}/lines`, { method: "POST", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   deleteChangeOrderLine: (changeOrderId: string, lineId: string) =>
     request<{ deleted: boolean }>(`/api/change-orders/${changeOrderId}/lines/${lineId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
-  changeOrderExportUrl: (id: string) => `/api/change-orders/${id}/export`,
+  changeOrderExportUrl: (id: string) => `${API_BASE}/api/change-orders/${id}/export`,
   compareEstimationBases: (id: string, otherId: string) =>
     request<{ comparison: EstimationBaseComparison }>(`/api/estimation-bases/${id}/compare?other_id=${otherId}`),
   applyCheckBases: (date: string) =>
@@ -387,7 +399,7 @@ export const api = {
     request<{ item_id: string }>(`/api/quotations/${quotationId}/items/${itemId}`, { method: "PATCH", headers: { "X-Admin-Key": adminKeyHeader() }, body: JSON.stringify(input) }),
   deleteQuotationItem: (quotationId: string, itemId: string) =>
     request<{ deleted: boolean }>(`/api/quotations/${quotationId}/items/${itemId}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
-  quotationExportUrl: (id: string) => `/api/quotations/${id}/export`,
+  quotationExportUrl: (id: string) => `${API_BASE}/api/quotations/${id}/export`,
   seaConditions: (seaAreaCode?: string) =>
     request<{ sea_conditions: SeaCondition[] }>(`/api/port-models/sea-conditions${seaAreaCode ? `?sea_area_code=${seaAreaCode}` : ""}`),
   upsertSeaCondition: (input: {
@@ -487,12 +499,12 @@ export const api = {
       body: fd,
     });
   },
-  csvExportUrl: (params: TimeseriesParams) => `/api/export/csv${buildQuery(toCsvParams(params))}`,
-  xlsxExportUrl: (params: TimeseriesParams) => `/api/export/xlsx${buildQuery(toCsvParams(params))}`,
-  pdfExportUrl: (params: TimeseriesParams) => `/api/export/pdf${buildQuery(toCsvParams(params))}`,
-  pptxExportUrl: (params: TimeseriesParams) => `/api/export/pptx${buildQuery(toCsvParams(params))}`,
+  csvExportUrl: (params: TimeseriesParams) => `${API_BASE}/api/export/csv${buildQuery(toCsvParams(params))}`,
+  xlsxExportUrl: (params: TimeseriesParams) => `${API_BASE}/api/export/xlsx${buildQuery(toCsvParams(params))}`,
+  pdfExportUrl: (params: TimeseriesParams) => `${API_BASE}/api/export/pdf${buildQuery(toCsvParams(params))}`,
+  pptxExportUrl: (params: TimeseriesParams) => `${API_BASE}/api/export/pptx${buildQuery(toCsvParams(params))}`,
   estimateLinkExportUrl: (snapshotId?: string) =>
-    `/api/export/estimate-link${snapshotId ? `?snapshot_id=${snapshotId}` : ""}`,
+    `${API_BASE}/api/export/estimate-link${snapshotId ? `?snapshot_id=${snapshotId}` : ""}`,
   aiStatus: () => request<AiStatus>("/api/ai/status"),
   aiTemplates: () => request<{ templates: AiTemplate[] }>("/api/ai/templates"),
   aiSummary: (params?: { audience?: AiAudience; region_id?: string }) =>

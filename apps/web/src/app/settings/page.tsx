@@ -9,7 +9,7 @@ export default function SettingsPage() {
   const [regions, setRegions] = useState<Region[]>([]);
   const [regionCode, setRegionCode] = useState("JP-01");
   const [period, setPeriod] = useState("3y");
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [adminKey, setAdminKey] = useState("");
   const [me, setMe] = useState<AuthMe | null>(null);
 
   useEffect(() => {
@@ -18,15 +18,10 @@ export default function SettingsPage() {
     const p = loadPrefs();
     setRegionCode(p.regionCode ?? "JP-01");
     setPeriod(p.period ?? "3y");
-    setTheme((p.theme as "light" | "dark") ?? "light");
+    setAdminKey(p.adminKey ?? "");
   }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [theme]);
-
   const save = () => {
-    savePrefs({ regionCode, period, theme });
+    savePrefs({ regionCode, period, adminKey });
     alert("設定を保存しました。");
   };
 
@@ -64,11 +59,14 @@ export default function SettingsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-gray-600">テーマ</label>
-            <select className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" value={theme} onChange={(e) => setTheme(e.target.value as "light" | "dark")}>
-              <option value="light">ライト</option>
-              <option value="dark">ダーク</option>
-            </select>
+            <label className="mb-1 block text-xs font-semibold text-gray-600">管理者キー（X-Admin-Key）</label>
+            <input
+              type="password"
+              className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+              value={adminKey}
+              onChange={(e) => setAdminKey(e.target.value)}
+              placeholder="管理API操作用の共有キー"
+            />
           </div>
           <button onClick={save} className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
             保存

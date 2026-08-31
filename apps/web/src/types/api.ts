@@ -60,6 +60,7 @@ export interface Series {
   label: string;
   unit: string;
   source_name: string;
+  source_code: string;
   source_url: string | null;
   data_kind: string;
   estimate_usable: boolean;

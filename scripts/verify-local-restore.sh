@@ -29,6 +29,17 @@ if [[ ! "$restore_database" =~ ^cci_restore_verify_[0-9A-Za-z_]+$ ]]; then
   exit 1
 fi
 
+image_migration_count="$(
+  docker compose -p "$project_name" run --rm --no-deps -T api \
+    node -e "const fs=require('fs'); process.stdout.write(String(fs.readdirSync('/app/migrations').filter(f=>/^\\d+_.+\\.sql$/.test(f)).length))"
+)"
+expected_migration_count="${CCI_EXPECTED_MIGRATION_COUNT:-$image_migration_count}"
+if [[ ! "$image_migration_count" =~ ^[0-9]+$ || ! "$expected_migration_count" =~ ^[0-9]+$ || "$image_migration_count" -ne "$expected_migration_count" ]]; then
+  echo "API image migration count mismatch: image=$image_migration_count expected=$expected_migration_count" >&2
+  echo "build or select the intended API image before running the restore drill" >&2
+  exit 1
+fi
+
 exists="$(docker compose -p "$project_name" exec -T db \
   psql --username=cci --dbname=postgres --tuples-only --no-align \
   --command="SELECT 1 FROM pg_database WHERE datname = '$restore_database'")"
@@ -41,10 +52,17 @@ docker compose -p "$project_name" exec -T db createdb --username=cci "$restore_d
 docker compose -p "$project_name" exec -T db \
   pg_restore --username=cci --dbname="$restore_database" --no-owner --no-privileges \
   <"$backup_file"
-docker compose -p "$project_name" exec -T db \
-  psql --username=cci --dbname="$restore_database" --set=ON_ERROR_STOP=1 \
-  --command="SELECT count(*) AS migration_count FROM schema_migrations;" \
-  --command="SELECT count(*) AS public_schema_table_count FROM information_schema.tables WHERE table_schema = 'public';"
+restored_migration_count="$(docker compose -p "$project_name" exec -T db \
+  psql --username=cci --dbname="$restore_database" --tuples-only --no-align \
+  --command="SELECT count(*) FROM schema_migrations")"
+public_table_count="$(docker compose -p "$project_name" exec -T db \
+  psql --username=cci --dbname="$restore_database" --tuples-only --no-align \
+  --command="SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")"
+if [[ ! "$restored_migration_count" =~ ^[0-9]+$ || "$restored_migration_count" -gt "$image_migration_count" ]]; then
+  echo "restored migration count is incompatible with API image: restored=$restored_migration_count image=$image_migration_count" >&2
+  exit 1
+fi
+echo "restore schema: migrations=$restored_migration_count image_migrations=$image_migration_count public_tables=$public_table_count"
 
 restore_database_url="$(
   docker compose -p "$project_name" run --rm --no-deps -T \
@@ -55,6 +73,14 @@ restore_database_url="$(
 DATABASE_URL="$restore_database_url" DATABASE_URL_DIRECT="$restore_database_url" \
   docker compose -p "$project_name" run --rm --no-deps -T \
   -e DATABASE_URL -e DATABASE_URL_DIRECT api node scripts/migrate.mjs
+
+post_migration_count="$(docker compose -p "$project_name" exec -T db \
+  psql --username=cci --dbname="$restore_database" --tuples-only --no-align \
+  --command="SELECT count(*) FROM schema_migrations")"
+if [[ "$post_migration_count" -ne "$image_migration_count" ]]; then
+  echo "restored database migration count mismatch after migrate: database=$post_migration_count image=$image_migration_count" >&2
+  exit 1
+fi
 
 DATABASE_URL="$restore_database_url" ADMIN_API_KEY="$drill_admin_key" \
   docker compose -p "$project_name" run --rm --no-deps -d --name "$api_container" \

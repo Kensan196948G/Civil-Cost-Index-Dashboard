@@ -16,7 +16,7 @@ Cloudflare Workers の Python ランタイムは FastAPI/pandas/openpyxl 等の�
 - API は **TypeScript + Hono** で実装し、Cloudflare Workers にデプロイする。
 - Cloudflare WorkerのDB接続は **@neondatabase/serverless**（HTTP ドライバ）を使用する。ただしNeonを正本とする決定はADR-003で失効し、Workerは読み取り専用の互換経路とする。
 - CSV パースは papaparse、Excel は SheetJS（xlsx）を使用する。
-- マイグレーションは `apps/api/scripts/migrate.mjs`（Node + pg）で実行し、`apps/api/migrations/*.sql`（現行001〜020）をchecksum付き台帳で管理する。
+- マイグレーションは `apps/api/scripts/migrate.mjs`（Node + pg）で実行し、`apps/api/migrations/*.sql`（現行001〜021）をchecksum付き台帳で管理する。
 - フロントエンドは Next.js の静的エクスポートを Cloudflare Pages にデプロイする。
 
 ### 理由

@@ -177,7 +177,8 @@ export function computeQualityScore(input: {
 
 export async function runQualityChecks(sql: Sql) {
   const rows = await sql`
-    SELECT i.item_name, r.region_name, ds.source_name,
+    SELECT t.data_source_id, t.item_id, t.region_id, t.unit, t.data_kind,
+           i.item_name, r.region_name, ds.source_name,
            to_char(t.period_date, 'YYYY-MM') AS period,
            t.value::text AS value
     FROM time_series_values t
@@ -193,7 +194,7 @@ export async function runQualityChecks(sql: Sql) {
 
   const grouped = new Map<string, SeriesQualityInput & { source_name: string }>();
   for (const row of rows) {
-    const key = `${row.item_name}:${row.region_name}`;
+    const key = JSON.stringify([row.data_source_id, row.item_id, row.region_id, row.unit, row.data_kind]);
     const entry =
       grouped.get(key) ??
       ({

@@ -33,10 +33,20 @@ Scriptは復元先DBへ接続する非公開の一時APIコンテナを起動し
 
 Restore drillは次を自動確認する。
 
+- API image内のMigration件数が`CCI_EXPECTED_MIGRATION_COUNT`（指定時）と一致すること
 - `/api/health/ready`が200を返すこと
-- 品目・地域・時系列のReadが成功すること
+- Migration 020/021、47都道府県、公式データソース分類が復元されること
+- 東京都・普通作業員の公式労務単価（2026-03、27,000円/日）がReadできること
 - 検証用案件の作成・積算・削除が成功すること
-- `schema_migrations`が19件で、適用済みchecksumに不一致がないこと
+- `schema_migrations`がAPI image内のMigration件数（現行21件）と一致し、適用済みchecksumに不一致がないこと
+
+Repositoryの最新コードを検証する場合は、古い`latest` imageの再利用を防ぐため先にbuildする。
+
+```bash
+docker compose build api
+COMPOSE_PROJECT_NAME=cci CCI_EXPECTED_MIGRATION_COUNT=21 \
+  ./scripts/verify-local-restore.sh artifacts/backups/cci-YYYYMMDD-HHMMSS.dump
+```
 
 ## 4. 自動Backup
 

@@ -64,7 +64,7 @@ export async function fetchRawRows(sql: Sql, p: TimeseriesParams): Promise<RawRo
              t.data_kind, t.estimate_usable, t.region_id, r.region_name, r.region_code,
              to_char(t.period_date, 'YYYY-MM') AS period_date,
              t.value::text AS value, t.unit, t.value_status, t.note,
-             ds.source_name, ds.source_url, ds.license_note, ds.redistribution_note, t.source_file_id,
+             ds.source_code, ds.source_name, ds.source_url, ds.license_note, ds.redistribution_note, t.source_file_id,
              to_char(t.updated_at, 'YYYY-MM-DD"T"HH24:MI:SSOF') AS updated_at
       FROM time_series_values t
       JOIN items i ON i.id = t.item_id
@@ -82,12 +82,12 @@ export function rawRowsToSeries(
   rows: RawRow[],
   p: Pick<TimeseriesParams, "normalize" | "basePeriod">
 ): Series[] {
-  const grouped = new Map<string, RawRow[]>();
-  for (const row of rows) {
-    const key = `${row.item_id}:${row.region_id}`;
-    const list = grouped.get(key) ?? [];
-    list.push(row);
-    grouped.set(key, list);
+  const grouped = groupRawRowsBySeries(rows);
+  const baseLabelCounts = new Map<string, number>();
+  for (const list of grouped.values()) {
+    const first = list[0];
+    const baseLabel = `${first.item_name}｜${first.region_name}`;
+    baseLabelCounts.set(baseLabel, (baseLabelCounts.get(baseLabel) ?? 0) + 1);
   }
 
   const series: Series[] = [];
@@ -99,10 +99,15 @@ export function rawRowsToSeries(
     const useNormalized = p.normalize && normalized.baseRaw != null;
     const sorted = [...list].sort((a, b) => a.period_date.localeCompare(b.period_date));
     series.push({
-      series_id: `${first.data_type}:${first.item_code}:${first.region_code}`,
-      label: `${first.item_name}｜${first.region_name}`,
+      series_id: [first.data_type, first.item_code, first.region_code, first.source_code, first.unit ?? "unitless"]
+        .map(encodeURIComponent)
+        .join(":"),
+      label: baseLabelCounts.get(`${first.item_name}｜${first.region_name}`)! > 1
+        ? `${first.item_name}｜${first.region_name}｜${first.source_name}（${first.unit ?? "単位なし"}）`
+        : `${first.item_name}｜${first.region_name}`,
       unit: useNormalized ? "index" : (first.unit ?? ""),
       source_name: first.source_name,
+      source_code: first.source_code,
       source_url: first.source_url,
       data_kind: first.data_kind,
       estimate_usable: first.estimate_usable,
@@ -122,6 +127,43 @@ export function rawRowsToSeries(
     });
   }
   return series.sort((a, b) => a.series_id.localeCompare(b.series_id));
+}
+
+export function rawSeriesKey(
+  row: Pick<RawRow, "data_source_id" | "item_id" | "region_id" | "unit" | "data_kind">
+): string {
+  return JSON.stringify([row.data_source_id, row.item_id, row.region_id, row.unit, row.data_kind]);
+}
+
+export function groupRawRowsBySeries(rows: RawRow[]): Map<string, RawRow[]> {
+  const grouped = new Map<string, RawRow[]>();
+  for (const row of rows) {
+    const key = rawSeriesKey(row);
+    const list = grouped.get(key) ?? [];
+    list.push(row);
+    grouped.set(key, list);
+  }
+  return grouped;
+}
+
+export function selectPreferredRawSeries(rows: RawRow[]): RawRow[] {
+  const groups = [...groupRawRowsBySeries(rows).values()];
+  groups.sort((a, b) => {
+    const firstA = a[0];
+    const firstB = b[0];
+    const usable = Number(firstB.estimate_usable) - Number(firstA.estimate_usable);
+    if (usable !== 0) return usable;
+    const national = Number(firstB.region_code === "JP-01") - Number(firstA.region_code === "JP-01");
+    if (national !== 0) return national;
+    const official = Number(!firstB.source_code.startsWith("SAMPLE_")) - Number(!firstA.source_code.startsWith("SAMPLE_"));
+    if (official !== 0) return official;
+    const latestA = a.reduce((latest, row) => row.period_date > latest ? row.period_date : latest, "");
+    const latestB = b.reduce((latest, row) => row.period_date > latest ? row.period_date : latest, "");
+    if (latestA !== latestB) return latestB.localeCompare(latestA);
+    if (a.length !== b.length) return b.length - a.length;
+    return rawSeriesKey(firstA).localeCompare(rawSeriesKey(firstB));
+  });
+  return groups[0] ?? [];
 }
 
 export async function buildTimeseries(

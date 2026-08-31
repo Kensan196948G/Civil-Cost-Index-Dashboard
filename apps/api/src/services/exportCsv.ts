@@ -1,17 +1,11 @@
 import type { Sql } from "../lib/db";
 import { toCsv } from "../lib/csv";
 import { computeRates, normalizeSeries } from "../lib/stats";
-import { fetchRawRows, type TimeseriesParams } from "./timeseries";
+import { fetchRawRows, groupRawRowsBySeries, type TimeseriesParams } from "./timeseries";
 
 export async function buildCsvExport(sql: Sql, p: TimeseriesParams): Promise<string> {
   const rows = await fetchRawRows(sql, p);
-  const grouped = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const key = `${row.item_id}:${row.region_id}`;
-    const list = grouped.get(key) ?? [];
-    list.push(row);
-    grouped.set(key, list);
-  }
+  const grouped = groupRawRowsBySeries(rows);
 
   const outputRows: (string | number | null)[][] = [];
   for (const list of grouped.values()) {

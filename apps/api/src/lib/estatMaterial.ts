@@ -18,7 +18,9 @@ const ITEM_ALIASES: Array<{ matcher: RegExp; itemName: string }> = [
   { matcher: /骨材\s*（\s*砂利\s*）/i, itemName: "骨材（砂利）" },
   { matcher: /骨材\s*（\s*砕石\s*）/i, itemName: "骨材（砕石）" },
   { matcher: /骨材\s*（\s*再生砕石\s*）/i, itemName: "骨材（再生砕石）" },
-  { matcher: /アスファルト合材/i, itemName: "アスファルト" },
+  // The master has one asphalt item. Use virgin material only; mapping recycled
+  // material to the same key would silently overwrite a distinct survey series.
+  { matcher: /アスファルト合材.*新材/i, itemName: "アスファルト" },
   { matcher: /異形棒鋼/i, itemName: "異形棒鋼" },
   { matcher: /Ｈ形鋼|H形鋼/i, itemName: "H形鋼" },
   { matcher: /木材\s*（\s*製材\s*）/i, itemName: "木材（製材）" },
@@ -160,7 +162,7 @@ export function estatRowsToCsvRows(
     品目: r.itemName,
     地域: r.regionName,
     値: String(r.value),
-    単位: "指数",
+    単位: "動向評価値",
     状態: "confirmed",
     注記: `e-Stat 主要建設資材需給・価格動向調査（価格動向・今回調査）: ${r.rawItemName}`,
   }));

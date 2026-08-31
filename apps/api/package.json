@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "build:worker": "wrangler deploy --dry-run --outdir dist",
-    "build:node": "esbuild src/server.ts src/scheduler-runner.ts --bundle --platform=node --format=esm --packages=external --outdir=dist-node --out-extension:.js=.mjs",
+    "build:node": "esbuild src/server.ts src/scheduler-runner.ts src/official-data-cli.ts --bundle --platform=node --format=esm --packages=external --outdir=dist-node --out-extension:.js=.mjs",
     "build": "npm run build:node && npm run build:worker",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

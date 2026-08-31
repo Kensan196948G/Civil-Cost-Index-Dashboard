@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Seed time-series data from data/samples/*.csv (idempotent by file hash).
+// Seed bundled official and sample time-series data (idempotent by file hash).
 import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
@@ -71,11 +71,17 @@ function parseNumeric(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-const FILES = [
+const OFFICIAL_FILES = [
+  { file: "data/official/mlit_labor_2026-03.csv", sourceCode: "MLIT_LABOR" },
+  { file: "data/official/estat_material_2026-07.csv", sourceCode: "ESTAT_MATERIAL_SUPPLY" },
+];
+const SAMPLE_FILES = [
   { file: "data/samples/sample_material_prices.csv", sourceCode: "SAMPLE_MATERIAL" },
   { file: "data/samples/sample_labor_costs.csv", sourceCode: "SAMPLE_LABOR" },
   { file: "data/samples/sample_price_index.csv", sourceCode: "SAMPLE_INDEX" },
 ];
+const seedSamples = process.env.SEED_SAMPLE_DATA === "true" || process.env.APP_ENV !== "production";
+const FILES = seedSamples ? [...OFFICIAL_FILES, ...SAMPLE_FILES] : OFFICIAL_FILES;
 
 const client = new pg.Client({ connectionString });
 await client.connect();
@@ -92,7 +98,10 @@ try {
     if (!existsSync(filePath)) { console.warn(`skip (not found): ${entry.file}`); continue; }
     const raw = readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
     const hash = createHash("sha256").update(raw).digest("hex");
-    const source = (await client.query("SELECT id, source_name FROM data_sources WHERE source_code = $1", [entry.sourceCode])).rows[0];
+    const source = (await client.query(
+      "SELECT id, source_name, data_kind, estimate_usable FROM data_sources WHERE source_code = $1",
+      [entry.sourceCode]
+    )).rows[0];
     if (!source) { console.warn(`skip (source not found): ${entry.sourceCode}`); continue; }
 
     const dup = await client.query(
@@ -119,12 +128,14 @@ try {
       await client.query(
         `INSERT INTO time_series_values
            (data_source_id, data_type, item_id, region_id, period_type, period_date, value, unit,
-            original_item_name, original_region_name, value_status, note)
-         VALUES ($1, $2, $3, $4, 'monthly', $5::date, $6, $7, $8, $9, $10, $11)
+            data_kind, estimate_usable, original_item_name, original_region_name, value_status, note)
+         VALUES ($1, $2, $3, $4, 'monthly', $5::date, $6, $7, $8, $9, $10, $11, $12, $13)
          ON CONFLICT (data_source_id, data_type, item_id, region_id, period_date, unit)
-         DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+         DO UPDATE SET value = EXCLUDED.value, data_kind = EXCLUDED.data_kind,
+                       estimate_usable = EXCLUDED.estimate_usable, updated_at = now()`,
         [source.id, item.category, item.id, region.id, `${period}-01`, value, unit,
-         row["品目"] ?? "", row["地域"] ?? "", row["状態"] ?? "confirmed", row["注記"] ?? null]
+         source.data_kind, source.estimate_usable, row["品目"] ?? "", row["地域"] ?? "",
+         row["状態"] ?? "confirmed", row["注記"] ?? null]
       );
       success++;
     }

@@ -1,5 +1,14 @@
 # リリースノート
 
+## Unreleased（2026-08-31: Local PostgreSQL運用の再現性）
+
+- LAN業務データ正本として`pgvector/pgvector:pg17`をDocker Composeへ追加
+- API起動前にMigration/Seedを完了し、`schema_migrations`へファイル名・SHA-256・適用日時を記録
+- CIのAPI Testを実PostgreSQL Integrationへ変更し、Migration再実行も検証
+- Local PostgreSQLの論理Backupと別名DBへのRestore drill Scriptを追加
+- SheetJSを公式配布`0.20.3`へ更新し、Prototype Pollution/ReDoSのHigh advisoryを解消
+- Cloudflare Worker + Neonは互換経路として維持し、自動同期やProduction切替は対象外
+
 ## Unreleased（2026-08-05: AI管理のDeepSeekキー設定と監査ログ閲覧）
 
 - `/admin/ai` に「DeepSeek APIキー設定」パネルを追加

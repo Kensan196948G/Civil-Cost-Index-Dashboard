@@ -1,5 +1,38 @@
 services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: cci
+      POSTGRES_USER: cci
+      POSTGRES_PASSWORD: ${CCI_DB_PASSWORD:?run ./scripts/init-local-env.sh first}
+    ports:
+      - "127.0.0.1:${CCI_DB_HOST_PORT:-15432}:5432"
+    volumes:
+      - cci_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cci -d cci"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    image: civil-cost-index-dashboard-api:latest
+    build:
+      context: ./apps/api
+    environment:
+      DATABASE_URL: ${CCI_LOCAL_DATABASE_URL:?run ./scripts/init-local-env.sh first}
+      DATABASE_URL_DIRECT: ${CCI_LOCAL_DATABASE_URL:?run ./scripts/init-local-env.sh first}
+    command: ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed.mjs"]
+    volumes:
+      - ./data:/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   api:
+    image: civil-cost-index-dashboard-api:latest
     build:
       context: ./apps/api
     environment:
@@ -7,7 +40,7 @@ services:
       APP_VERSION: ${APP_VERSION:-0.1.0}
       PORT: 8000
       API_HOST: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_URL: ${CCI_LOCAL_DATABASE_URL:?run ./scripts/init-local-env.sh first}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       FETCH_ALLOWED_HOSTS: ${FETCH_ALLOWED_HOSTS:-}
       BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-}
@@ -30,6 +63,9 @@ services:
     ports:
       - "${CCI_API_HOST_PORT:-8000}:8000"
     restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -37,6 +73,7 @@ services:
       retries: 10
 
   web:
+    image: civil-cost-index-dashboard-web:latest
     build:
       context: ./apps/web
       args:
@@ -46,8 +83,16 @@ services:
       PORT: 3000
       HOSTNAME: 0.0.0.0
     ports:
-      - "3000:3000"
+      - "${CCI_WEB_HOST_PORT:-3000}:3000"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     depends_on:
       api:
         condition: service_healthy
+
+volumes:
+  cci_postgres_data:

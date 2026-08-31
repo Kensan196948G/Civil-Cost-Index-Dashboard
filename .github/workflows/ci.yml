@@ -13,6 +13,24 @@ jobs:
   api:
     name: API (lint / typecheck / test / build)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: cci_test
+          POSTGRES_USER: cci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cci -d cci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://cci@127.0.0.1:5432/cci_test?sslmode=disable
+      DATABASE_URL_DIRECT: postgresql://cci@127.0.0.1:5432/cci_test?sslmode=disable
+      ADMIN_API_KEY: ci-only-not-a-secret
     defaults:
       run:
         working-directory: apps/api
@@ -24,6 +42,10 @@ jobs:
           cache: npm
           cache-dependency-path: apps/api/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run db:migrate
+      - run: npm run db:migrate
+      - run: npm run db:seed
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
@@ -43,6 +65,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

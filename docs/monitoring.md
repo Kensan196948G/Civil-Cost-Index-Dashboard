@@ -7,9 +7,10 @@
 | API 死活 | `GET /api/health/live` | HTTP 200 |
 | API+DB 死活 | `GET /api/health/ready` | HTTP 200 |
 | Web 死活 | `GET /` | HTTP 200 |
+| Local scheduler | `docker compose ps scheduler` | healthy |
 | API 例外 | Workers Observability Logs | エラーログなし |
 | DB 更新 | `GET /api/dashboard/summary` の `last_updated_at` | 想定頻度内で更新 |
-| DB 容量 | Neon ダッシュボード（Storage） | 計画の範囲内 |
+| DB 容量 | Local PostgreSQL volume / filesystem | 計画の範囲内 |
 
 ## 2. 死活監視（現状）
 
@@ -25,6 +26,8 @@ curl -s -o /dev/null -w '%{http_code}\n' https://cci-web-assets.kensan1969.worke
 ## 3. ログ監視
 
 - Workers Observability（無料枠）: `wrangler tail` またはダッシュボード
+- Local scheduler: `docker compose -p cci -f /opt/cci/docker-compose.yml logs --tail=100 scheduler`
+- `scheduler_cycle`が確認間隔内に継続し、`scheduler_cycle_failed`が連続していないことを確認
 - 内部エラーは `console.error` で出力され、ログに `internal_error` として記録される
 - Logpush（有料）は未設定。頻度が増えたら検討
 

@@ -31,8 +31,7 @@ export function computeNextRun(
 async function notifiedRecently(sql: Sql, key: string, hours = 24): Promise<boolean> {
   const rows = await sql`
     SELECT id FROM notifications_log
-    WHERE message LIKE ${`%${key}%`}
-      AND status = 'success'
+    WHERE subject = ${key}
       AND created_at > now() - (${hours} || ' hours')::interval
     LIMIT 1
   `;
@@ -42,27 +41,51 @@ async function notifiedRecently(sql: Sql, key: string, hours = 24): Promise<bool
 export async function runScheduledJobs(
   sql: Sql,
   env: Env,
-  now: Date = new Date()
-): Promise<{ ran: number; stale_notified: number }> {
-  const due = await sql`
-    SELECT fs.*, ds.source_name, ds.source_code
-    FROM fetch_schedules fs
-    JOIN data_sources ds ON ds.id = fs.data_source_id
-    WHERE fs.enabled = true
-      AND (fs.next_run_at IS NULL OR fs.next_run_at <= ${now})
-    ORDER BY fs.created_at
-  `;
+  now: Date = new Date(),
+  options: { leaseSeconds?: number; retrySeconds?: number } = {}
+): Promise<{ ran: number; failed: number; stale_notified: number }> {
+  const leaseSeconds = options.leaseSeconds ?? 900;
+  const retrySeconds = options.retrySeconds ?? 3600;
+  const leaseUntil = new Date(now.getTime() + leaseSeconds * 1000);
   let ran = 0;
-  for (const schedule of due) {
+  let failed = 0;
+  while (true) {
+    const [schedule] = await sql`
+      WITH candidate AS (
+        SELECT id
+        FROM fetch_schedules
+        WHERE enabled = true
+          AND (next_run_at IS NULL OR next_run_at <= ${now})
+        ORDER BY created_at
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      UPDATE fetch_schedules fs
+      SET next_run_at = ${leaseUntil}
+      FROM candidate
+      WHERE fs.id = candidate.id
+      RETURNING fs.id, fs.schedule_type, fs.expected_day
+    `;
+    if (!schedule) break;
+
     try {
-      await runSchedule(sql, env, schedule.id);
-      const next = computeNextRun(schedule.schedule_type, schedule.expected_day, now);
+      const result = await runSchedule(sql, env, schedule.id);
+      const succeeded = result.status !== "error";
+      const next = succeeded
+        ? computeNextRun(schedule.schedule_type, schedule.expected_day, now)
+        : new Date(now.getTime() + retrySeconds * 1000);
       await sql`
         UPDATE fetch_schedules SET next_run_at = ${next} WHERE id = ${schedule.id}
       `;
-      ran++;
+      if (succeeded) ran++;
+      else failed++;
     } catch (e) {
+      failed++;
       console.error("scheduled_run_failed", schedule.id, e);
+      const retryAt = new Date(now.getTime() + retrySeconds * 1000);
+      await sql`
+        UPDATE fetch_schedules SET next_run_at = ${retryAt} WHERE id = ${schedule.id}
+      `;
     }
   }
 
@@ -93,7 +116,7 @@ export async function runScheduledJobs(
       }
     }
   }
-  return { ran, stale_notified: staleNotified };
+  return { ran, failed, stale_notified: staleNotified };
 }
 
 export function schedulesForNextRun(now: Date): Date[] {

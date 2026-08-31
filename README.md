@@ -70,7 +70,7 @@ flowchart TB
 | 🏗 施工実績 | 社内実績単価の蓄積と採用単価候補へのフィードバック | `/admin/construction-records/` |
 | 🗂️ データソース管理 | 公式データソース登録・URL取得（CSV/Excel）・無効化 | `/admin/data-sources/` |
 | 📥 取込履歴 | CSV/Excel/URL取込の成功・失敗・エラー行確認 | `/admin/fetch-jobs/` |
-| ⏰ 定期取得 | Cloudflare Cronによる日次/月次/年次取得・未更新通知・承認後に本番反映 | `/admin/schedules/` |
+| ⏰ 定期取得 | Local schedulerによる日次/月次/年次取得・未更新通知・承認後に本番反映 | `/admin/schedules/` |
 | ✓ 承認待ちデータ | 定期取得データの承認・却下 | `/admin/staged/` |
 | ¥ 単価版管理 | 適用開始日・税込/税抜・旧版比較・承認・スナップショット | `/admin/price-versions/` |
 | ☺ ユーザー管理 | RBAC（7役割）とCloudflare Accessメール連携 | `/admin/users/` |
@@ -105,7 +105,7 @@ flowchart TB
 | API（直接） | <http://192.168.0.185:18000> | Hono API |
 | API（Web経由） | `http://192.168.0.185:3000/api/*` | 同一オリジンプロキシ（CORS不要） |
 
-systemd ユニット `cci.service` が起動時自動起動し、Docker Compose で PostgreSQL/API/Web を常駐させます。
+systemd ユニット `cci.service` が起動時自動起動し、Docker Compose で PostgreSQL/API/Scheduler/Web を常駐させます。
 
 ### ☁️ Cloudflare（本番ドメイン）
 
@@ -582,7 +582,7 @@ sudo systemctl restart cci
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | Cloudflare Worker Secret + LAN | AI生成（DeepSeek） |
 | `PERPLEXITY_API_KEY` / `PERPLEXITY_MODEL` | Cloudflare Worker Secret + LAN | AI生成（Perplexity） |
 | `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | Cloudflare Worker Secret | RBAC（Cloudflare Access JWT検証） |
-| `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL` | Cloudflare Worker Secret | 定期取得・未更新通知 |
+| `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL` | LAN `/etc/cci/cci.env` | 定期取得・未更新通知 |
 | `CLOUDFLARE_API_TOKEN` | GitHub Actions Secret | デプロイ |
 | `NEXT_PUBLIC_API_BASE_URL` | GitHub Actions Variable | Webビルド時のAPI URL |
 

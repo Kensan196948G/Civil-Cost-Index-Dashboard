@@ -65,7 +65,7 @@ API 用サブドメイン（例: `api.ccid.mirai-dx-platform.com`）は未設定
 
 利用者指示により、当面は本機の自動割当IP＋ポートで稼働する（systemd 常駐）。
 
-- 構成: Docker Compose（`db` / `migrate` / `api` / `web`）+ systemd `cci.service`（起動時自動起動）
+- 構成: Docker Compose（`db` / `migrate` / `api` / `scheduler` / `web`）+ systemd `cci.service`（起動時自動起動）
 - Web: `http://<自動割当IP>:3000` / API 直接: `http://<自動割当IP>:18000`
 - DB: Local PostgreSQL 17（pgvector）をLAN業務データ正本として接続
 - 環境ファイル: `/etc/cci/cci.env`（root のみ読取可）

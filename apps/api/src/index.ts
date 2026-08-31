@@ -206,6 +206,18 @@ app.use("*", securityHeadersMiddleware);
 app.use("*", rateLimitMiddleware);
 app.use("*", basicAuthMiddleware);
 app.use("*", corsMiddleware);
+app.use("*", async (c, next) => {
+  const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+  if (parseBool(c.env.READ_ONLY_MODE) && !safeMethods.has(c.req.method)) {
+    return fail(
+      c,
+      "READ_ONLY_MODE",
+      "このAPIは読み取り専用です。更新はLAN正本のAPIから実行してください。",
+      503
+    );
+  }
+  return next();
+});
 
 const CATEGORIES = ["MATERIAL_PRICE", "LABOR_COST", "PRICE_INDEX", "FUEL_PRICE", "OTHER"];
 
@@ -2466,6 +2478,10 @@ export async function scheduled(
   env: Env,
   ctx: ExecutionContext
 ): Promise<void> {
+  if (parseBool(env.READ_ONLY_MODE)) {
+    console.log("scheduled_jobs_skipped_read_only");
+    return;
+  }
   ctx.waitUntil(
     (async () => {
       try {

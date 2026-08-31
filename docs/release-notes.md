@@ -6,8 +6,10 @@
 - API起動前にMigration/Seedを完了し、`schema_migrations`へファイル名・SHA-256・適用日時を記録
 - CIのAPI Testを実PostgreSQL Integrationへ変更し、Migration再実行も検証
 - Local PostgreSQLの論理Backupと別名DBへのRestore drill Scriptを追加
+- Restore drillを復元先専用の一時APIでHealth・Read・案件作成/積算/削除まで検証する方式へ強化
 - SheetJSを公式配布`0.20.3`へ更新し、Prototype Pollution/ReDoSのHigh advisoryを解消
 - Cloudflare Worker + Neonは互換経路として維持し、自動同期やProduction切替は対象外
+- Cloudflare Workerは`READ_ONLY_MODE=true`とし、承認Deploy後は非安全メソッドとCron書き込みを拒否
 
 ## Unreleased（2026-08-05: AI管理のDeepSeekキー設定と監査ログ閲覧）
 

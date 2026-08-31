@@ -112,7 +112,7 @@ systemd ユニット `cci.service` が起動時自動起動し、Docker Compose 
 | 対象 | URL | 備考 |
 | --- | --- | --- |
 | Web（本番ドメイン） | <https://ccid.mirai-dx-platform.com> | Cloudflare Access 適用済み（mirai-const.co.jp メール限定） |
-| API（バックエンド） | <https://cci-api-production.kensan1969.workers.dev> | Cloudflare Worker（Hono + Neon） |
+| API（バックエンド） | <https://cci-api-production.kensan1969.workers.dev> | Cloudflare Worker（Hono + Neon）。読み取り専用設定は次回承認Deployで反映 |
 | API ヘルスチェック | <https://cci-api-production.kensan1969.workers.dev/api/health/ready> | DB接続含む死活確認 |
 | DB（Cloudflare経路） | Neon PostgreSQL（ap-southeast-1） | Local PostgreSQLへ到達できないWorker用。接続情報はCloudflare Secretで管理 |
 
@@ -479,7 +479,7 @@ Civil-Cost-Index-Dashboard/
 ```bash
 # Local PostgreSQL、Migration、Seed、API、Webを起動
 ./scripts/init-local-env.sh
-docker compose up --build -d
+docker compose up --build --wait --wait-timeout 180
 docker compose ps
 curl http://127.0.0.1:18000/api/health/ready
 ```

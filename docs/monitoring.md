@@ -46,7 +46,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://cci-web-assets.kensan1969.worke
 
 - 初期表示: 3 秒以内（目標）
 - グラフ再描画: 1 秒以内（目標）
-- 現状サンプルデータ（44行）では問題なし。データ量増加時は time_series_values のインデックスを確認
+- 同梱公式データ200行（労務188行・資材動向12行）では問題なし。履歴蓄積時は`time_series_values`のインデックスを確認
 
 月次P50/P95/P99・5xx率:
 

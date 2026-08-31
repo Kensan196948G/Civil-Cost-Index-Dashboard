@@ -21,6 +21,8 @@ services:
     build:
       context: ./apps/api
     environment:
+      APP_ENV: ${APP_ENV:-production}
+      SEED_SAMPLE_DATA: ${SEED_SAMPLE_DATA:-false}
       DATABASE_URL: ${CCI_LOCAL_DATABASE_URL:?run ./scripts/init-local-env.sh first}
       DATABASE_URL_DIRECT: ${CCI_LOCAL_DATABASE_URL:?run ./scripts/init-local-env.sh first}
     command: ["sh", "-c", "node scripts/migrate.mjs && node scripts/seed.mjs"]

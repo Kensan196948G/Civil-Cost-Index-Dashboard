@@ -2,6 +2,10 @@
 
 ## Unreleased（2026-08-31: Local PostgreSQL運用の再現性）
 
+- 国土交通省「令和8年3月適用 公共工事設計労務単価」から47都道府県・4職種の実単価188行を再現可能なCLIで正規化し、provenance manifest付きでSeed
+- e-Stat「主要建設資材需給・価格動向調査」2026年7月の全国平均12系列を動向評価値としてSeedし、新材・再生材の同一キー上書きを防止
+- 47都道府県マスタと公式データソースの現行URL・利用条件・分類をMigration 020で追加
+- Production Seedは公式データのみとし、サンプル時系列は`SEED_SAMPLE_DATA=true`の開発デモに限定（既存DBのサンプル削除は未実施）
 - request ID・status・durationを含む構造化HTTP logと月次P50/P95/P99・5xx率集計CLIを追加
 - データ鮮度を計画周期の2倍で判定し、failed/partial_success取込の通知を追加
 - Local API/Scheduler/Web logを10MB×5世代へrotation

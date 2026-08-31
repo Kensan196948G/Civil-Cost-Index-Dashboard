@@ -95,7 +95,7 @@ describe("parseEstatMaterialSupply", () => {
 });
 
 describe("estatRowsToCsvRows", () => {
-  it("emits canonical ingest rows with 指数 unit and source note", () => {
+  it("emits canonical ingest rows with trend-assessment unit and source note", () => {
     const parsed = parseEstatMaterialSupply(buildFixtureWorkbook());
     const converted = estatRowsToCsvRows(parsed);
     expect(converted.rows[0]).toMatchObject({
@@ -103,9 +103,27 @@ describe("estatRowsToCsvRows", () => {
       品目: "セメント",
       地域: "全国",
       値: "3.19",
-      単位: "指数",
+      単位: "動向評価値",
       状態: "confirmed",
     });
     expect(converted.rows[0].注記).toContain("価格動向・今回調査");
+  });
+
+  it("keeps virgin asphalt and skips recycled asphalt instead of overwriting it", () => {
+    const aoa = [
+      ["表 - ２"],
+      ["＜令和8年7月1～5日現在＞"],
+      ["アスファルト合材 （ 新材 ： 密粒度アスコン ）"],
+      ["全国平均値", "", "3.40", "3.51"],
+      ["アスファルト合材 （ 再生材 ： 密粒度アスコン ）"],
+      ["全国平均値", "", "3.45", "3.54"],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "表-２");
+    const parsed = parseEstatMaterialSupply(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as ArrayBuffer);
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0]).toMatchObject({ itemName: "アスファルト", value: 3.51 });
+    expect(parsed.skips.some((skip) => skip.reason.includes("再生材"))).toBe(true);
   });
 });

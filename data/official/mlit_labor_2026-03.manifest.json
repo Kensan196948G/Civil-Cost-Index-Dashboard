@@ -1,0 +1,14 @@
+{
+  "dataset": "令和8年3月から適用する公共工事設計労務単価",
+  "publisher": "国土交通省",
+  "source_url": "https://www.mlit.go.jp/report/press/content/001981942.pdf",
+  "published_at": "2026-02-17",
+  "applicable_from": "2026-03-01",
+  "license": "公共データ利用規約（第1.0版）",
+  "license_url": "https://www.mlit.go.jp/link.html",
+  "attribution": "出典：国土交通省『令和8年3月から適用する公共工事設計労務単価』を加工して作成",
+  "source_sha256": "f659c012a9bc50bb87731bfc469707a9360af7faf9aba073f09f4c193d573003",
+  "normalized_sha256": "bc295e2d88ba46f0e2490dd6371a376e2d86139e70d3a41bfa3b51a7d9bf009e",
+  "normalized_rows": 188,
+  "transformation": "公式公表資料から対象系列を抽出し、標準CSVへ編集・加工"
+}

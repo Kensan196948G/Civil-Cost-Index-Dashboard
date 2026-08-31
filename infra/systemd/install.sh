@@ -16,7 +16,7 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
 fi
 
 install -d -o root -g root -m 0755 \
-  "$INSTALL_DIR" "$INSTALL_DIR/data/samples" "$INSTALL_DIR/scripts" "$ETC_DIR"
+  "$INSTALL_DIR" "$INSTALL_DIR/data/official" "$INSTALL_DIR/data/samples" "$INSTALL_DIR/scripts" "$ETC_DIR"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   db_password="$(openssl rand -hex 24)"
@@ -54,6 +54,7 @@ docker compose --env-file "$ENV_FILE" -f "$REPO_ROOT/docker-compose.yml" build a
 echo "==> install compose, seed data, and database operation scripts"
 install -m 0644 "$REPO_ROOT/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
 cp -a "$REPO_ROOT/data/samples/." "$INSTALL_DIR/data/samples/"
+cp -a "$REPO_ROOT/data/official/." "$INSTALL_DIR/data/official/"
 install -m 0755 "$REPO_ROOT/scripts/backup-local-postgres.sh" "$INSTALL_DIR/scripts/backup-local-postgres.sh"
 install -m 0755 "$REPO_ROOT/scripts/verify-local-restore.sh" "$INSTALL_DIR/scripts/verify-local-restore.sh"
 

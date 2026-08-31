@@ -1,0 +1,22 @@
+{
+  "dataset": "主要建設資材需給・価格動向調査 2026年7月",
+  "publisher": "国土交通省",
+  "source_url": "https://www.e-stat.go.jp/stat-search/file-download?statInfId=000040478417&fileKind=0",
+  "published_at": "2026-07-27",
+  "survey_period": "2026-07",
+  "selection_policy": "全国平均の価格動向・今回調査を抽出。アスファルトは既存マスタと一意に対応する新材のみを採用し、再生材は除外。",
+  "skipped_rows": [
+    {
+      "row": 557,
+      "column": "品目",
+      "reason": "未対応の品目: アスファルト合材 （ 再生材 ： 密粒度アスコン ）"
+    }
+  ],
+  "license": "e-Stat利用規約（政府標準利用規約2.0、CC BY 4.0互換）",
+  "license_url": "https://www.e-stat.go.jp/terms-of-use",
+  "attribution": "出典：政府統計の総合窓口(e-Stat)『主要建設資材需給・価格動向調査』を加工して作成",
+  "source_sha256": "d42bd471f645750853c75fb4ef35267344f0494862928b14c1fc1b50b8df2ab0",
+  "normalized_sha256": "2d434aed5e5d9840885cf4a47b74e2cc9a4161f6e3ff6795a2d75a04d05c832e",
+  "normalized_rows": 12,
+  "transformation": "公式公表資料から対象系列を抽出し、標準CSVへ編集・加工"
+}

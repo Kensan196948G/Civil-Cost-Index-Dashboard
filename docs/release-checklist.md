@@ -2,15 +2,15 @@
 
 ## 1. リリース前チェック
 
-- [x] API: lint / typecheck / テスト150件（Local PostgreSQL Integration含む） / ビルド（Worker dry-run + Node bundle）
+- [x] API: lint / typecheck / テスト170件（Local PostgreSQL Integration含む） / ビルド（Worker dry-run + Node bundle）
 - [x] Web: lint / typecheck / テスト4件 / standalone ビルド（Docker・本番経路）
 - [x] データ取込: CSV/Excel 手動取込・URL取得・e-Stat 主要建設資材（表-2）専用変換・Shift_JIS 対応
 - [x] Production依存監査: API/Webともnpm audit 0件（SheetJS 0.20.3を含む）
 - [x] 秘密・接続文字列・PII のリポジトリ/履歴露出なし（プレースホルダのみ）
 - [x] API 異常系: 401 / 409 / 400 / 501 / 404 を確認
 - [x] E2E（Playwright・Docker）: 29/29 PASS（全8画面・モバイル375px・a11y基本・console errorなし）
-- [x] 空Local PostgreSQLへのMigration 19件、再実行19件skip、checksum不一致拒否
-- [x] Local PostgreSQL Backup/Restore drill（Migration 19件 / public schema table 42件）
+- [x] 空Local PostgreSQLへのMigration 20件、再実行20件skip、checksum不一致拒否
+- [x] Local PostgreSQL Backup/Restore drill（Migration 19件 / public schema table 42件。Migration 020追加後の再実施は本番適用前に必要）
 - [ ] Cloudflare API `/api/health/ready`（2026-08-31実測503。Secret変更/DeployはHuman Gate）
 - [x] Local API `/api/health/ready` 200、認証境界401、Web 200
 

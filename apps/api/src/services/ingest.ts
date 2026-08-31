@@ -93,7 +93,8 @@ export async function ingestRows(input: IngestInput): Promise<IngestResult> {
   } = input;
 
   const sourceRows = await sql`
-    SELECT id, source_name FROM data_sources WHERE id = ${dataSourceId}
+    SELECT id, source_name, data_kind, estimate_usable
+    FROM data_sources WHERE id = ${dataSourceId}
   `;
   if (sourceRows.length === 0) {
     const err = new Error("データソースが見つかりません。");
@@ -101,6 +102,8 @@ export async function ingestRows(input: IngestInput): Promise<IngestResult> {
     throw err;
   }
   const dataSourceName = sourceRows[0].source_name as string;
+  const sourceDataKind = sourceRows[0].data_kind as string;
+  const sourceEstimateUsable = Boolean(sourceRows[0].estimate_usable);
 
   const mapped = mapRowsToCanonical(rows);
   const items = await sql`
@@ -153,8 +156,8 @@ export async function ingestRows(input: IngestInput): Promise<IngestResult> {
          value_status, note)
       VALUES
         (${dataSourceId}, ${item.category}, ${item.id}, ${region.id}, 'monthly',
-         ${`${period}-01`}::date, ${rawValue}, ${unit || null}, ${item.data_kind},
-         ${item.estimate_usable}, ${itemName}, ${regionName}, ${valueStatus}, ${row.note || null})
+         ${`${period}-01`}::date, ${rawValue}, ${unit || null}, ${sourceDataKind},
+         ${sourceEstimateUsable}, ${itemName}, ${regionName}, ${valueStatus}, ${row.note || null})
       ON CONFLICT (data_source_id, data_type, item_id, region_id, period_date, unit)
       DO UPDATE SET value = EXCLUDED.value, value_status = EXCLUDED.value_status,
                     data_kind = EXCLUDED.data_kind, estimate_usable = EXCLUDED.estimate_usable,

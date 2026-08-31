@@ -33,6 +33,7 @@ beforeAll(async () => {
     ADMIN_API_KEY: process.env.ADMIN_API_KEY ?? "",
     CORS_ORIGINS: "http://localhost:3000",
     APP_VERSION: "0.1.0",
+    RATE_LIMIT_PER_MINUTE: "1000",
     // スモークテストは従来どおり匿名閲覧を許可したデモモードで全フローを確認する
     // （認証境界の検証は "auth boundary" テストで ALLOW_ANONYMOUS_VIEWER を切り替えて実施）
     ALLOW_ANONYMOUS_VIEWER: "true",
@@ -175,6 +176,29 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const res = await get("/api/data-sources");
     expect(res.status).toBe(200);
     expect(res.body.data.data_sources.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("serves bundled official labor data with source governance", async () => {
+    const sources = await get("/api/data-sources");
+    const laborSource = sources.body.data.data_sources.find(
+      (source: { source_code: string }) => source.source_code === "MLIT_LABOR"
+    );
+    expect(laborSource).toMatchObject({ data_kind: "actual_price", estimate_usable: true });
+
+    const items = await get("/api/items?category=LABOR_COST");
+    const common = items.body.data.items.find((item: { item_name: string }) => item.item_name === "普通作業員");
+    const regions = await get("/api/regions");
+    const tokyo = regions.body.data.regions.find((region: { region_name: string }) => region.region_name === "東京都");
+    const series = await get(
+      `/api/timeseries?data_type=LABOR_COST&item_ids=${common.id}&region_ids=${tokyo.id}&start_period=2026-03&end_period=2026-03`
+    );
+    expect(series.status).toBe(200);
+    expect(series.body.data.series[0]).toMatchObject({
+      source_name: "公共工事設計労務単価",
+      data_kind: "actual_price",
+      estimate_usable: true,
+    });
+    expect(series.body.data.series[0].points[0]).toMatchObject({ period: "2026-03", value: 27000 });
   });
 
   it("fetch jobs", async () => {

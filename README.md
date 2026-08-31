@@ -437,7 +437,7 @@ Cloudflare は `wrangler secret put` → `wrangler deploy` → `/api/ai/status` 
 | `ESTAT_MATERIAL_SUPPLY` | e-Stat 主要建設資材需給・価格動向調査 | 資材 | 国土交通省 | Excel | 月次 | URL取込（動向評価値として「参考のみ」） |
 | `ESTAT_CPI` | e-Stat 消費者物価指数 | 指数 | 総務省統計局 | API | 月次 | e-Stat API（appId必須） |
 | `KENPLAZA_MATERIAL` | けんせつPlaza 主要建設資材価格 | 資材 | 経済調査会 | Web | 月次 | Web閲覧・手動取込 |
-| `MLIT_LABOR` | 公共工事設計労務単価 | 労務 | 国土交通省 | PDF/Excel | 年次 | 公表資料の手動取込 |
+| `MLIT_LABOR` | 公共工事設計労務単価 | 労務 | 国土交通省 | PDF | 年次 | 令和8年3月適用・47都道府県4職種を同梱Seed |
 
 取得手順・API仕様・マッピングは [データ取得手順書](docs/data-acquisition.md) を参照してください。
 
@@ -450,7 +450,7 @@ Cloudflare は `wrangler secret put` → `wrangler deploy` → `/api/ai/status` 
 | グラフ | Apache ECharts | 時系列・比較グラフ |
 | バックエンド | Hono (TypeScript) on Cloudflare Workers | API・集計・取込・積算エンジン |
 | DB | Local PostgreSQL 17（LAN正本）/ Neon（Worker互換経路） | マスタ・時系列・履歴（pgvector含む） |
-| マイグレーション | SQL（`apps/api/migrations/` 001〜019） | SHA-256付き適用台帳でスキーマ管理 |
+| マイグレーション | SQL（`apps/api/migrations/` 001〜020） | SHA-256付き適用台帳でスキーマ管理 |
 | CI/CD | GitHub Actions + Wrangler | テスト・ビルド・デプロイ |
 | 監視 | Workers Observability + ヘルスエンドポイント | ログ・死活確認 |
 
@@ -462,7 +462,8 @@ Civil-Cost-Index-Dashboard/
 │   ├── web/                 # Next.js フロントエンド（static export）
 │   └── api/                 # Hono Worker API + マイグレーション + シード
 ├── data/
-│   └── samples/             # サンプルCSV（シード元）
+│   ├── official/            # 正規化済み公式CSVとprovenance manifest
+│   └── samples/             # 開発デモ用サンプルCSV
 ├── docs/                    # 要件・設計・運用・監視・リリースノート等
 ├── infra/
 │   └── neon/                # Neonプロジェクト情報（秘密情報なし）
@@ -484,7 +485,8 @@ docker compose ps
 curl http://127.0.0.1:18000/api/health/ready
 ```
 
-Composeの`migrate` serviceはDBのhealth確認後にMigrationとサンプルSeedを実行します。
+Composeの`migrate` serviceはDBのhealth確認後にMigrationとSeedを実行します。Productionでは公式データ200行のみ、
+開発環境では`.env`の`SEED_SAMPLE_DATA=true`により既存サンプルも投入します。
 Migrationは同じファイルを再適用せず、適用済みファイルの改変をchecksum不一致として停止します。
 
 Native API開発では、ComposeのDBをホスト側`127.0.0.1:15432`から使用します。
@@ -497,7 +499,7 @@ set +a
 cd apps/api
 npm ci
 npm run db:migrate
-npm run db:seed      # サンプルデータ投入（同一ハッシュはスキップ）
+npm run db:seed      # 公式データ＋開発時サンプルを投入（同一ハッシュはスキップ）
 npm run db:seed:demo # MVP確認用の架空案件・見積・積算・監査ログを冪等投入
 npm run dev          # http://localhost:8787
 

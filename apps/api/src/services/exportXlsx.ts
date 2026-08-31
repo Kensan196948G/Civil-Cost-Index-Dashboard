@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import type { Sql } from "../lib/db";
 import { computeRates, normalizeSeries } from "../lib/stats";
-import { fetchRawRows, type TimeseriesParams } from "./timeseries";
+import { fetchRawRows, groupRawRowsBySeries, type TimeseriesParams } from "./timeseries";
 
 export const DATA_KIND_LABELS: Record<string, string> = {
   actual_price: "実単価",
@@ -20,13 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export async function buildXlsxExport(sql: Sql, p: TimeseriesParams): Promise<ArrayBuffer> {
   const rows = await fetchRawRows(sql, p);
-  const grouped = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const key = `${row.item_id}:${row.region_id}`;
-    const list = grouped.get(key) ?? [];
-    list.push(row);
-    grouped.set(key, list);
-  }
+  const grouped = groupRawRowsBySeries(rows);
 
   const detailRows: (string | number | null)[][] = [];
   for (const list of grouped.values()) {

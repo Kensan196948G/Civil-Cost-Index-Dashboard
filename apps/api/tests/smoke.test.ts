@@ -155,7 +155,12 @@ describe.skipIf(!hasDb)("integration smoke", () => {
   it("compare", async () => {
     const res = await get("/api/compare?series=MATERIAL_PRICE:STEEL_H:JP-01,PRICE_INDEX:INDEX_CONSTRUCTION:JP-01");
     expect(res.status).toBe(200);
-    expect(res.body.data.series.length).toBe(2);
+    expect(res.body.data.series).toHaveLength(3);
+    expect(res.body.data.series).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source_code: "SAMPLE_MATERIAL", data_kind: "actual_price", unit: "円/t" }),
+      expect.objectContaining({ source_code: "ESTAT_MATERIAL_SUPPLY", data_kind: "trend_assessment", unit: "動向評価値" }),
+      expect.objectContaining({ source_code: "SAMPLE_INDEX", data_kind: "official_index" }),
+    ]));
   });
 
   it("dashboard summary", async () => {
@@ -199,6 +204,26 @@ describe.skipIf(!hasDb)("integration smoke", () => {
       estimate_usable: true,
     });
     expect(series.body.data.series[0].points[0]).toMatchObject({ period: "2026-03", value: 27000 });
+  });
+
+  it("does not mix actual prices and trend assessments for the same item", async () => {
+    const items = await get("/api/items?category=MATERIAL_PRICE");
+    const steel = items.body.data.items.find((item: { item_code: string }) => item.item_code === "STEEL_H");
+    const regions = await get("/api/regions");
+    const national = regions.body.data.regions.find((region: { region_code: string }) => region.region_code === "JP-01");
+    const result = await get(
+      `/api/timeseries?data_type=MATERIAL_PRICE&item_ids=${steel.id}&region_ids=${national.id}`
+    );
+    expect(result.status).toBe(200);
+    const actual = result.body.data.series.find((series: { source_code: string }) => series.source_code === "SAMPLE_MATERIAL");
+    const trend = result.body.data.series.find((series: { source_code: string }) => series.source_code === "ESTAT_MATERIAL_SUPPLY");
+    expect(actual).toMatchObject({ unit: "円/t", data_kind: "actual_price", estimate_usable: true });
+    expect(actual.points).toHaveLength(18);
+    expect(actual.points.every((point: { raw_value: number }) => point.raw_value > 80_000)).toBe(true);
+    expect(trend).toMatchObject({ unit: "動向評価値", data_kind: "trend_assessment", estimate_usable: false });
+    expect(trend.points).toEqual([
+      expect.objectContaining({ period: "2026-07", raw_value: 3.67 }),
+    ]);
   });
 
   it("fetch jobs", async () => {

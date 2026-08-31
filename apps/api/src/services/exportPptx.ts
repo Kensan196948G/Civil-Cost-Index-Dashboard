@@ -1,6 +1,6 @@
 import type { Sql } from "../lib/db";
 import { computeRates, normalizeSeries } from "../lib/stats";
-import { fetchRawRows, type TimeseriesParams } from "./timeseries";
+import { fetchRawRows, groupRawRowsBySeries, type TimeseriesParams } from "./timeseries";
 
 // ---- 最小 ZIP（Stored / 無圧縮）ライター ----
 
@@ -203,13 +203,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export async function buildPptxExport(sql: Sql, p: TimeseriesParams): Promise<Uint8Array> {
   const rows = await fetchRawRows(sql, p);
-  const grouped = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const key = `${row.item_id}:${row.region_id}`;
-    const list = grouped.get(key) ?? [];
-    list.push(row);
-    grouped.set(key, list);
-  }
+  const grouped = groupRawRowsBySeries(rows);
   const slides: Array<{ title: string; subtitle: string; lines: string[] }> = [];
   for (const list of grouped.values()) {
     const first = list[0];

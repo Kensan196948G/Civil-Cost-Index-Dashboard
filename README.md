@@ -450,7 +450,7 @@ Cloudflare は `wrangler secret put` → `wrangler deploy` → `/api/ai/status` 
 | グラフ | Apache ECharts | 時系列・比較グラフ |
 | バックエンド | Hono (TypeScript) on Cloudflare Workers | API・集計・取込・積算エンジン |
 | DB | Local PostgreSQL 17（LAN正本）/ Neon（Worker互換経路） | マスタ・時系列・履歴（pgvector含む） |
-| マイグレーション | SQL（`apps/api/migrations/` 001〜020） | SHA-256付き適用台帳でスキーマ管理 |
+| マイグレーション | SQL（`apps/api/migrations/` 001〜021） | SHA-256付き適用台帳でスキーマ管理 |
 | CI/CD | GitHub Actions + Wrangler | テスト・ビルド・デプロイ |
 | 監視 | Workers Observability + ヘルスエンドポイント | ログ・死活確認 |
 

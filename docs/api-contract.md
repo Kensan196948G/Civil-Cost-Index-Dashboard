@@ -231,6 +231,7 @@ Response `data`:
       "label": "H形鋼｜全国",
       "unit": "index",
       "source_name": "公開統計",
+      "source_code": "MLIT_STAT",
       "source_url": "https://example.jp",
       "data_kind": "actual_price",
       "estimate_usable": true,
@@ -242,7 +243,7 @@ Response `data`:
 }
 ```
 
-Rules: `value` is normalized (index) when `normalize=true`, otherwise `raw_value`. Missing points are omitted (line breaks). `status`: confirmed / preliminary / revised / missing.
+Rules: `value` is normalized (index) when `normalize=true`, otherwise `raw_value`. Missing points are omitted (line breaks). `status`: confirmed / preliminary / revised / missing. The API never combines rows across data source, unit, or `data_kind`; those are returned as separate series with distinct `series_id` values.
 
 ## GET /api/compare
 

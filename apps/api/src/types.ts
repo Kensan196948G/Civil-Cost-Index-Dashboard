@@ -109,6 +109,7 @@ export type Series = {
   label: string;
   unit: string;
   source_name: string;
+  source_code: string;
   source_url: string | null;
   data_kind: string;
   estimate_usable: boolean;
@@ -145,6 +146,7 @@ export type RawRow = {
   unit: string | null;
   value_status: string;
   note: string | null;
+  source_code: string;
   source_name: string;
   source_url: string | null;
   license_note: string | null;

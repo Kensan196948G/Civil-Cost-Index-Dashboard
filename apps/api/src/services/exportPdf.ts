@@ -3,7 +3,7 @@ import fontkit from "@pdf-lib/fontkit";
 import type { Sql } from "../lib/db";
 import type { Env } from "../types";
 import { computeRates, normalizeSeries } from "../lib/stats";
-import { fetchRawRows, type TimeseriesParams } from "./timeseries";
+import { fetchRawRows, groupRawRowsBySeries, type TimeseriesParams } from "./timeseries";
 
 const DEFAULT_FONT_URL =
   "https://cdn.jsdelivr.net/npm/@expo-google-fonts/noto-sans-jp/NotoSansJP_400Regular.ttf";
@@ -133,13 +133,7 @@ export async function buildPdfExport(
   fontBytes?: Uint8Array
 ): Promise<Uint8Array> {
   const rows = await fetchRawRows(sql, p);
-  const grouped = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const key = `${row.item_id}:${row.region_id}`;
-    const list = grouped.get(key) ?? [];
-    list.push(row);
-    grouped.set(key, list);
-  }
+  const grouped = groupRawRowsBySeries(rows);
   const sections: Array<{ heading: string; rows: string[][] }> = [];
   for (const list of grouped.values()) {
     const first = list[0];

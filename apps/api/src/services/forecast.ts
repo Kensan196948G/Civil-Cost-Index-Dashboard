@@ -3,7 +3,7 @@ import type { Sql } from "../lib/db";
 import type { Env } from "../types";
 import type { Identity } from "../lib/auth";
 import { generateAiText } from "../lib/ai";
-import { fetchRawRows } from "./timeseries";
+import { fetchRawRows, selectPreferredRawSeries } from "./timeseries";
 
 export const forecastSchema = z.object({
   item_id: z.string().min(1),
@@ -31,12 +31,13 @@ export async function generateForecast(
     regionIds: region_id ? [region_id] : undefined,
     normalize: false,
   });
-  if (rows.length < 3) {
+  const selectedRows = selectPreferredRawSeries(rows.filter((row) => row.estimate_usable));
+  if (selectedRows.length < 3) {
     const err = new Error("予測に十分な時系列データがありません（3件以上必要）。");
     (err as Error & { status?: number }).status = 400;
     throw err;
   }
-  const sorted = [...rows].sort((a, b) => a.period_date.localeCompare(b.period_date));
+  const sorted = [...selectedRows].sort((a, b) => a.period_date.localeCompare(b.period_date));
   const recent = sorted.slice(-Math.min(24, sorted.length));
   const values = recent.map((r) => Number(r.value));
   const latest = values[values.length - 1];
@@ -49,6 +50,10 @@ export async function generateForecast(
   const stats = {
     item_name: recent[recent.length - 1].item_name,
     region_name: recent[recent.length - 1].region_name,
+    source_name: recent[recent.length - 1].source_name,
+    source_code: recent[recent.length - 1].source_code,
+    data_kind: recent[recent.length - 1].data_kind,
+    unit: recent[recent.length - 1].unit,
     latest_value: latest,
     latest_period: recent[recent.length - 1].period_date,
     sample_months: values.length,

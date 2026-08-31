@@ -1,6 +1,7 @@
 import type { Sql } from "../lib/db";
-import { computeRates, normalizeSeries } from "../lib/stats";
+import { addMonths, computeRates, normalizeSeries } from "../lib/stats";
 import { listAlerts } from "./alerts";
+import { fetchRawRows, selectPreferredRawSeries } from "./timeseries";
 
 const KPI_DEFS = [
   { category: "MATERIAL_PRICE", name: "鋼材価格", item_code: "STEEL_H" },
@@ -22,32 +23,19 @@ export async function getDashboardSummary(
 
   const kpis = [];
   for (const def of KPI_DEFS) {
-    const conditions = ["i.item_code = $1", "i.category = $2"];
-    const params: unknown[] = [def.item_code, def.category];
-    if (opts.regionId) {
-      params.push(opts.regionId);
-      conditions.push(`t.region_id = $${params.length}`);
+    const candidates = await fetchRawRows(sql, {
+      dataType: def.category,
+      itemCodes: [def.item_code],
+      regionIds: opts.regionId ? [opts.regionId] : undefined,
+      normalize: false,
+    });
+    let rows = selectPreferredRawSeries(candidates.filter((row) => row.estimate_usable));
+    const rangeMonths = opts.period === "1y" ? 13 : opts.period === "3y" ? 37 : opts.period === "5y" ? 61 : null;
+    if (rangeMonths && rows.length > 0) {
+      const latestPeriod = rows.reduce((max, row) => row.period_date > max ? row.period_date : max, "");
+      const cutoff = addMonths(latestPeriod, -rangeMonths);
+      rows = rows.filter((row) => row.period_date >= cutoff);
     }
-    if (opts.period === "1y") {
-      conditions.push(`t.period_date >= (SELECT max(period_date) - interval '13 months' FROM time_series_values)`);
-    } else if (opts.period === "3y") {
-      conditions.push(`t.period_date >= (SELECT max(period_date) - interval '37 months' FROM time_series_values)`);
-    } else if (opts.period === "5y") {
-      conditions.push(`t.period_date >= (SELECT max(period_date) - interval '61 months' FROM time_series_values)`);
-    }
-    const rows = await sql(
-      `
-      SELECT i.item_name, i.default_unit, r.region_name,
-             to_char(t.period_date, 'YYYY-MM') AS period,
-             t.value::text AS value
-      FROM time_series_values t
-      JOIN items i ON i.id = t.item_id
-      JOIN regions r ON r.id = t.region_id
-      WHERE ${conditions.join(" AND ")}
-      ORDER BY t.period_date ASC
-      `,
-      params
-    );
     if (rows.length === 0) {
       kpis.push({
         name: def.name,
@@ -59,7 +47,7 @@ export async function getDashboardSummary(
       });
       continue;
     }
-    const points = rows.map((r) => ({ period: r.period, value: Number(r.value) }));
+    const points = rows.map((r) => ({ period: r.period_date, value: Number(r.value) }));
     const rates = computeRates(points);
     const lastPoint = points[points.length - 1];
     const rate = rates.get(lastPoint.period);
@@ -68,7 +56,7 @@ export async function getDashboardSummary(
     kpis.push({
       name: def.name,
       value: isIndex ? (normalized.baseRaw != null ? normalized.values.get(lastPoint.period) : lastPoint.value) : lastPoint.value,
-      unit: isIndex ? "指数" : (rows[0].default_unit ?? ""),
+      unit: isIndex ? "指数" : (rows[0].unit ?? ""),
       period: lastPoint.period,
       mom_rate: rate?.mom ?? null,
       yoy_rate: rate?.yoy ?? null,

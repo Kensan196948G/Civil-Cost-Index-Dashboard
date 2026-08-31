@@ -22,9 +22,31 @@ const adminHeaders = {
 await request("/api/health/ready");
 const regions = (await request("/api/regions", { headers: { "X-Admin-Key": adminKey } })).regions;
 const items = (await request("/api/items", { headers: { "X-Admin-Key": adminKey } })).items;
-await request("/api/timeseries?data_type=MATERIAL_PRICE", { headers: { "X-Admin-Key": adminKey } });
+const sources = (await request("/api/data-sources", { headers: { "X-Admin-Key": adminKey } })).data_sources;
 
 if (!regions.length || !items.length) throw new Error("restored master data is empty");
+if (regions.filter((region) => region.region_type === "prefecture").length !== 47) {
+  throw new Error("restored prefecture master does not contain 47 prefectures");
+}
+const laborSource = sources.find((source) => source.source_code === "MLIT_LABOR");
+const trendSource = sources.find((source) => source.source_code === "ESTAT_MATERIAL_SUPPLY");
+if (laborSource?.data_kind !== "actual_price" || laborSource.estimate_usable !== true) {
+  throw new Error("restored MLIT labor source governance is invalid");
+}
+if (trendSource?.data_kind !== "trend_assessment" || trendSource.estimate_usable !== false) {
+  throw new Error("restored e-Stat material source governance is invalid");
+}
+const commonLabor = items.find((item) => item.item_code === "LABOR_COMMON");
+const tokyo = regions.find((region) => region.region_name === "東京都");
+if (!commonLabor || !tokyo) throw new Error("restored official labor master is incomplete");
+const officialLabor = await request(
+  `/api/timeseries?data_type=LABOR_COST&item_ids=${commonLabor.id}&region_ids=${tokyo.id}&start_period=2026-03&end_period=2026-03`,
+  { headers: { "X-Admin-Key": adminKey } }
+);
+const laborSeries = officialLabor.series.find((series) => series.source_code === "MLIT_LABOR");
+if (laborSeries?.points?.[0]?.raw_value !== 27000 || laborSeries.unit !== "円/日") {
+  throw new Error("restored official Tokyo labor value is invalid");
+}
 
 let projectId;
 try {
@@ -66,5 +88,8 @@ try {
 
 console.log(JSON.stringify({
   status: "ok",
-  checks: ["health", "regions", "items", "timeseries", "project-create", "project-simulate", "project-delete"],
+  checks: [
+    "health", "regions", "items", "source-governance", "official-labor-timeseries",
+    "project-create", "project-simulate", "project-delete",
+  ],
 }));

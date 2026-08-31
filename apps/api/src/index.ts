@@ -9,6 +9,7 @@ import {
   rateLimitMiddleware,
   requireAdmin,
   requestIdMiddleware,
+  requestLogMiddleware,
   securityHeadersMiddleware,
   type AppContext,
 } from "./lib/http";
@@ -202,6 +203,7 @@ function toArrayBuffer(u8: Uint8Array): ArrayBuffer {
 }
 
 app.use("*", requestIdMiddleware);
+app.use("*", requestLogMiddleware);
 app.use("*", securityHeadersMiddleware);
 app.use("*", rateLimitMiddleware);
 app.use("*", basicAuthMiddleware);

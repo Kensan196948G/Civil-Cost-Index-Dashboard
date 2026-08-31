@@ -60,9 +60,13 @@ curl http://127.0.0.1:18000/api/health/ready
 cd apps/api && npx wrangler tail cci-api-production
 
 # 直近ログは Cloudflare ダッシュボード > Workers & Pages > cci-api-production > Logs
+
+# Local APIの構造化request log
+sudo docker compose -p cci -f /opt/cci/docker-compose.yml logs --tail=100 api
 ```
 
-ログ項目: request_id / method / path / status / duration（アプリケーション側では内部エラーのみ出力）。
+`REQUEST_LOGGING=true`の場合、`http_request`としてrequest_id / method / path / status /
+duration_msをJSON出力します。query stringやcredentialは記録しません。
 
 ## 5. データ更新（管理者）
 

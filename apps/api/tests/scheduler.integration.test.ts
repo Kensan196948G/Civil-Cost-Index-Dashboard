@@ -82,8 +82,40 @@ describe.skipIf(!hasDb)("local scheduler integration", () => {
         [staleSubject]
       );
       expect(notificationCountAfter.rows[0].count).toBe(notificationCount.rows[0].count);
+
+      const sourceFile = await client.query<{ id: string }>(`
+        INSERT INTO source_files
+          (data_source_id, file_name, file_format, file_hash, fetch_status)
+        VALUES ($1, 'partial.csv', 'csv', $2, 'success')
+        RETURNING id
+      `, [sourceId, "a".repeat(64)]);
+      await client.query(`
+        INSERT INTO transform_logs
+          (source_file_id, transform_status, total_rows, success_rows, error_rows, finished_at)
+        VALUES ($1, 'partial_success', 3, 2, 1, $2)
+      `, [sourceFile.rows[0].id, now]);
+
+      const failureNotification = await runScheduledJobs(
+        sql,
+        env,
+        new Date(now.getTime() + 2000),
+        { retrySeconds: 120 }
+      );
+      expect(failureNotification.fetch_failures_notified).toBe(1);
+      const repeatedFailureNotification = await runScheduledJobs(
+        sql,
+        env,
+        new Date(now.getTime() + 3000),
+        { retrySeconds: 120 }
+      );
+      expect(repeatedFailureNotification.fetch_failures_notified).toBe(0);
     } finally {
       await client.query("DELETE FROM fetch_schedules WHERE id = $1", [scheduleId]);
+      await client.query(`
+        DELETE FROM transform_logs
+        WHERE source_file_id IN (SELECT id FROM source_files WHERE data_source_id = $1)
+      `, [sourceId]);
+      await client.query("DELETE FROM source_files WHERE data_source_id = $1", [sourceId]);
       await client.query("DELETE FROM data_sources WHERE id = $1", [sourceId]);
       await client.query(
         "DELETE FROM notifications_log WHERE subject LIKE '%Scheduler integration test%'"

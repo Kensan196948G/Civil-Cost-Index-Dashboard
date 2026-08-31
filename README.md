@@ -583,6 +583,7 @@ sudo systemctl restart cci
 | `PERPLEXITY_API_KEY` / `PERPLEXITY_MODEL` | Cloudflare Worker Secret + LAN | AI生成（Perplexity） |
 | `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | Cloudflare Worker Secret | RBAC（Cloudflare Access JWT検証） |
 | `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL` | LAN `/etc/cci/cci.env` | 定期取得・未更新通知 |
+| `REQUEST_LOGGING` | Cloudflare Worker Var + LAN | request完了の構造化log（既定true） |
 | `CLOUDFLARE_API_TOKEN` | GitHub Actions Secret | デプロイ |
 | `NEXT_PUBLIC_API_BASE_URL` | GitHub Actions Variable | Webビルド時のAPI URL |
 

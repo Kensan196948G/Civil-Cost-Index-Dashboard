@@ -46,6 +46,7 @@ const env = {
   PDF_CJK_FONT_URL: process.env.PDF_CJK_FONT_URL ?? "",
   AUTH_TRUST_PROXY: process.env.AUTH_TRUST_PROXY ?? "",
   ALLOW_ANONYMOUS_VIEWER: process.env.ALLOW_ANONYMOUS_VIEWER ?? "",
+  READ_ONLY_MODE: process.env.READ_ONLY_MODE ?? "",
   RATE_LIMIT_PER_MINUTE: process.env.RATE_LIMIT_PER_MINUTE ?? "",
   AI_ROUTING: process.env.AI_ROUTING ?? "",
 };

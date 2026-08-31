@@ -8,6 +8,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ETC_DIR="/etc/cci"
 INSTALL_DIR="/opt/cci"
 ENV_FILE="$ETC_DIR/cci.env"
+web_host_port="${CCI_WEB_HOST_PORT:-3000}"
 
 if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
   echo "run this installer with sudo" >&2
@@ -28,10 +29,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
     echo "CCI_LOCAL_DATABASE_URL=postgresql://cci:${db_password}@db:5432/cci?sslmode=disable"
     echo "CCI_DB_HOST_PORT=15432"
     echo "CCI_API_HOST_PORT=${CCI_API_HOST_PORT:-18000}"
-    echo "CCI_WEB_HOST_PORT=${CCI_WEB_HOST_PORT:-3000}"
+    echo "CCI_WEB_HOST_PORT=$web_host_port"
     echo "ADMIN_API_KEY=$admin_key"
     echo "ALLOW_ANONYMOUS_VIEWER=false"
-    echo "CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000"
+    echo "CORS_ORIGINS=http://localhost:${web_host_port},http://127.0.0.1:${web_host_port}"
   } >"$ENV_FILE"
   echo "created $ENV_FILE with random database and admin credentials"
 elif ! grep -q '^CCI_LOCAL_DATABASE_URL=' "$ENV_FILE"; then
@@ -41,7 +42,7 @@ elif ! grep -q '^CCI_LOCAL_DATABASE_URL=' "$ENV_FILE"; then
     echo "CCI_LOCAL_DATABASE_URL=postgresql://cci:${db_password}@db:5432/cci?sslmode=disable"
     echo "CCI_DB_HOST_PORT=15432"
     echo "CCI_API_HOST_PORT=${CCI_API_HOST_PORT:-18000}"
-    echo "CCI_WEB_HOST_PORT=${CCI_WEB_HOST_PORT:-3000}"
+    echo "CCI_WEB_HOST_PORT=$web_host_port"
   } >>"$ENV_FILE"
   echo "added Local PostgreSQL settings to existing $ENV_FILE"
 fi

@@ -27,10 +27,8 @@ Production deployはHuman Gateであり、`main`へのpushでは自動実行し�
 ### 手動
 
 ```bash
-cd apps/api && wrangler deploy
-cd apps/web
-NEXT_STATIC_EXPORT=1 NEXT_PUBLIC_API_BASE_URL=https://cci-api-production.kensan1969.workers.dev npm run build
-wrangler deploy
+(cd apps/api && wrangler deploy)
+(cd apps/web && NEXT_STATIC_EXPORT=1 NEXT_PUBLIC_API_BASE_URL=https://cci-api-production.kensan1969.workers.dev npm run build && wrangler deploy)
 ```
 
 > 注: Cloudflare へのデプロイは現在 **手動実行**（GitHub Actions `Deploy Cloudflare (manual)`）とし、

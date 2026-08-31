@@ -3,7 +3,7 @@
 ## ADR-001: API は Cloudflare Worker（TypeScript）として実装する
 
 **日付:** 2026-07-31
-**ステータス:** 一部更新（DB正本はADR-003を優先）
+**ステータス:** 一部失効（DBに関する決定はADR-003で置換）
 
 ### 背景
 
@@ -14,9 +14,9 @@ Cloudflare Workers の Python ランタイムは FastAPI/pandas/openpyxl 等の�
 ### 決定
 
 - API は **TypeScript + Hono** で実装し、Cloudflare Workers にデプロイする。
-- DB 接続は **@neondatabase/serverless**（HTTP ドライバ）を使用し、Neon PostgreSQL を正本とする。
+- Cloudflare WorkerのDB接続は **@neondatabase/serverless**（HTTP ドライバ）を使用する。ただしNeonを正本とする決定はADR-003で失効し、Workerは読み取り専用の互換経路とする。
 - CSV パースは papaparse、Excel は SheetJS（xlsx）を使用する。
-- マイグレーションは `apps/api/scripts/migrate.mjs`（Node + pg）で実行し、既存 SQL（001/002）を再利用する。
+- マイグレーションは `apps/api/scripts/migrate.mjs`（Node + pg）で実行し、`apps/api/migrations/*.sql`（現行001〜019）をchecksum付き台帳で管理する。
 - フロントエンドは Next.js の静的エクスポートを Cloudflare Pages にデプロイする。
 
 ### 理由

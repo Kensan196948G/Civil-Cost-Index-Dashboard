@@ -20,7 +20,7 @@ LAN業務データの正本はADR-003によりLocal PostgreSQLである。本書
 
 - 互換性日付: 2026-07-31 / `nodejs_compat`
 - Observability: logs enabled（head_sampling_rate=1, persist=true）
-- vars: `APP_VERSION`, `CORS_ORIGINS`
+- vars: `APP_VERSION`, `CORS_ORIGINS`, `READ_ONLY_MODE=true`（Repository設定済み。Production反映はHuman Gate待ち）
 - secrets: `DATABASE_URL`（Neon pooled）, `ADMIN_API_KEY`
 - routes: workers.dev（カスタムドメイン未設定）
 
@@ -70,6 +70,9 @@ API 用サブドメイン（例: `api.ccid.mirai-dx-platform.com`）は未設定
 - DB: Local PostgreSQL 17（pgvector）をLAN業務データ正本として接続
 - 環境ファイル: `/etc/cci/cci.env`（root のみ読取可）
 - Cloudflare Workers + Neonは互換経路として維持し、Local PostgreSQLとの自動同期は行わない
+- API Workerは次回の承認Deploy後、`READ_ONLY_MODE=true`でGET / HEAD / OPTIONS以外を503拒否し、Cronによる定期書き込みも実行しない
+- Upload、案件・積算更新、管理設定などのWriteはLAN Web/APIからLocal PostgreSQLへ実行する。NeonでWriteを受けて後から正本へ反映する運用は行わない
+- POSTを使う計算・Export・AI等もCloudflare互換経路では利用不可とし、LAN APIを使用する
 
 ## 5.2 Migration / Rollback（要約）
 

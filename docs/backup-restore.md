@@ -21,7 +21,7 @@ BackupファイルはGitへ追加せず、権限制御された別媒体へ複�
 
 ## 3. Restore Drill
 
-本番DB`cci`へ直接Restoreしない。Backupを新規の`cci_restore_verify_*` DBへ復元して、Migration数とTable数を確認する。
+本番DB`cci`へ直接Restoreしない。Backupを新規の`cci_restore_verify_*` DBへ復元し、Migration checksum、Table数、復元先専用APIの主要Read/Writeを確認する。
 
 ```bash
 COMPOSE_PROJECT_NAME=cci \
@@ -29,9 +29,9 @@ COMPOSE_PROJECT_NAME=cci \
   ./scripts/verify-local-restore.sh artifacts/backups/cci-YYYYMMDD-HHMMSS.dump
 ```
 
-検証DBは証跡確認のため自動削除しない。削除は対象名・Backup・検証結果を確認したうえで、運用者が明示的に承認して実施する。
+Scriptは復元先DBへ接続する非公開の一時APIコンテナを起動し、終了時に停止する。検証DBは証跡確認のため自動削除しない。削除は対象名・Backup・検証結果を確認したうえで、運用者が明示的に承認して実施する。
 
-Restore後は次を追加確認する。
+Restore drillは次を自動確認する。
 
 - `/api/health/ready`が200を返すこと
 - 品目・地域・時系列のReadが成功すること
@@ -55,7 +55,7 @@ Environment=CCI_BACKUP_DIR=/var/backups/cci
 ExecStart=/opt/cci/scripts/backup-local-postgres.sh
 ```
 
-Timerは`OnCalendar=*-*-* 03:30:00`、`Persistent=true`とし、失敗通知を監視へ接続する。
+Timerは`OnCalendar=*-*-* 03:30:00 Asia/Tokyo`、`Persistent=true`とし、失敗通知を監視へ接続する。
 
 ## 5. 障害復旧
 

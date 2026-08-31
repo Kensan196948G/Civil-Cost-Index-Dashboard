@@ -11,6 +11,7 @@ if [[ -e .env ]]; then
 fi
 
 db_password="$(openssl rand -hex 24)"
+admin_key="$(openssl rand -hex 32)"
 db_port="15432"
 umask 077
 sed \
@@ -18,6 +19,7 @@ sed \
   -e "s#^DATABASE_URL_DIRECT=\$#DATABASE_URL_DIRECT=postgresql://cci:${db_password}@127.0.0.1:${db_port}/cci?sslmode=disable#" \
   -e "s#^CCI_DB_PASSWORD=\$#CCI_DB_PASSWORD=${db_password}#" \
   -e "s#^CCI_LOCAL_DATABASE_URL=\$#CCI_LOCAL_DATABASE_URL=postgresql://cci:${db_password}@db:5432/cci?sslmode=disable#" \
+  -e "s#^ADMIN_API_KEY=\$#ADMIN_API_KEY=${admin_key}#" \
   .env.example >.env
 
-echo ".env created with a random Local PostgreSQL password"
+echo ".env created with random Local PostgreSQL and admin credentials"

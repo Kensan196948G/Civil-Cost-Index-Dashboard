@@ -2,6 +2,8 @@
 
 ## Unreleased（2026-08-31: Local PostgreSQL運用の再現性）
 
+- Local PostgreSQL向けの常駐scheduler serviceを追加し、期限到来した定期取得を既定5分間隔で実行
+- scheduleを原子的にclaimして多重実行を抑止し、取得失敗を成功件数へ含めず既定1時間後に再試行
 - LAN業務データ正本として`pgvector/pgvector:pg17`をDocker Composeへ追加
 - API起動前にMigration/Seedを完了し、`schema_migrations`へファイル名・SHA-256・適用日時を記録
 - CIのAPI Testを実PostgreSQL Integrationへ変更し、Migration再実行も検証

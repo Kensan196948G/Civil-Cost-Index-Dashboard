@@ -127,4 +127,4 @@ curl "https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData?appId=<appId>&stat
 - 本番DBへの取込は「データソース管理」の管理者操作（X-Admin-Key）でのみ行います。
 - `FETCH_ALLOWED_HOSTS` を設定する場合は、利用する全ホストを明示してください。
 - 取得した統計データの再配布条件はソースごとに異なるため、社外公開前に確認してください。
-- スケジュール自動取得（定期ジョブ）は未実装です。月次/年次の更新は運用カレンダーで管理してください。
+- Local schedulerは登録済みURLを自動取得します。APIがないPDF/Web中心のソースは、引き続き運用カレンダーで手動更新してください。

@@ -1,5 +1,5 @@
 [Unit]
-Description=Civil Cost Index Dashboard (Docker Compose: PostgreSQL + API + Web)
+Description=Civil Cost Index Dashboard (Docker Compose: PostgreSQL + API + Scheduler + Web)
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target

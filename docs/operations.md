@@ -2,7 +2,7 @@
 
 ## 1. 稼働構成
 
-- LAN正本: Docker ComposeのPostgreSQL 17 + API + Web
+- LAN正本: Docker ComposeのPostgreSQL 17 + API + Scheduler + Web
 - Cloudflare互換経路: Workers静的アセット + API Worker + Neon PostgreSQL
 - Local PostgreSQLとNeonの自動同期は行わない。LAN業務データはLocal PostgreSQLを正本とする。
 - 監視: Local `/api/health/ready`、Docker health、Cloudflare Workers Observability
@@ -77,13 +77,16 @@ cd apps/api && npx wrangler tail cci-api-production
 ### 5.1 定期取得（自動・承認ワークフロー）
 
 1. `/admin/schedules/` でデータソースの取得スケジュール（日次/月次/年次）を登録
-2. Cloudflare Cron（毎日 01:00 JST）が自動実行し、`approval_required=true` の場合は承認待ちへ格納
+2. Local schedulerが5分ごとに期限到来を確認し、`approval_required=true` の場合は承認待ちへ格納
 3. `/admin/staged/` でデータ承認者・積算責任者が内容を確認し「承認して反映」または「却下」
 4. 未更新・取得失敗・重複は `/admin/schedules/` の通知先（Teams/Slack）へ通知
 
-必要な環境変数（Cloudflare Worker Secret）:
+必要な環境変数（LAN `/etc/cci/cci.env`）:
 
 - `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL`（通知先。未設定時はログのみ記録）
+- `SCHEDULER_INTERVAL_SECONDS`（確認間隔、既定300秒）
+- `SCHEDULER_RETRY_SECONDS`（取得失敗時の再試行間隔、既定3600秒）
+- `SCHEDULER_LEASE_SECONDS`（多重実行防止lease、既定900秒）
 - `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD`（RBAC用のCloudflare Access設定）
 - `PDF_CJK_FONT_URL`（PDF出力の日本語フォントURL。未設定時はデフォルトCDNを使用）
 

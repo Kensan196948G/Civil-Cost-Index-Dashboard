@@ -12,6 +12,7 @@ export interface Sql {
 
 type PgPoolLike = {
   query(query: string, params?: unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
+  end(): Promise<void>;
 };
 
 const pgPools = new Map<string, Promise<PgPoolLike>>();
@@ -68,4 +69,10 @@ export function getSql(env: Env): Sql {
     return getLocalPgSql(env.DATABASE_URL);
   }
   return neon(env.DATABASE_URL) as unknown as Sql;
+}
+
+export async function closeSqlConnections(): Promise<void> {
+  const pools = [...pgPools.values()];
+  pgPools.clear();
+  await Promise.all(pools.map(async (pool) => (await pool).end()));
 }

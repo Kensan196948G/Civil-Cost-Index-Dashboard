@@ -72,6 +72,31 @@ services:
       timeout: 5s
       retries: 10
 
+  scheduler:
+    image: civil-cost-index-dashboard-api:latest
+    build:
+      context: ./apps/api
+    command: ["node", "dist-node/scheduler-runner.mjs"]
+    environment:
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DATABASE_URL: ${CCI_LOCAL_DATABASE_URL:?run ./scripts/init-local-env.sh first}
+      FETCH_ALLOWED_HOSTS: ${FETCH_ALLOWED_HOSTS:-}
+      NOTIFY_TEAMS_URL: ${NOTIFY_TEAMS_URL:-}
+      NOTIFY_SLACK_URL: ${NOTIFY_SLACK_URL:-}
+      SCHEDULER_INTERVAL_SECONDS: ${SCHEDULER_INTERVAL_SECONDS:-300}
+      SCHEDULER_RETRY_SECONDS: ${SCHEDULER_RETRY_SECONDS:-3600}
+      SCHEDULER_LEASE_SECONDS: ${SCHEDULER_LEASE_SECONDS:-900}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "const fs=require('fs');const age=Date.now()-Number(fs.readFileSync('/tmp/cci-scheduler-heartbeat','utf8'));const max=(Number(process.env.SCHEDULER_INTERVAL_SECONDS||300)+120)*1000;process.exit(age<=max?0:1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
   web:
     image: civil-cost-index-dashboard-web:latest
     build:

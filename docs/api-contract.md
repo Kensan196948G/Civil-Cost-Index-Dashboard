@@ -385,14 +385,18 @@ Body:
 `index_item_id` 指定時は基準年月→調達予定月の実データ変動率にシナリオ係数を加算します。
 データ不足時はシナリオ係数のみで計算し `warnings` に明記します。
 
-## 定期取得（Cloudflare Cron）
+## 定期取得（Local scheduler）
 
-Worker の Cron トリガー（毎日 16:00 UTC = 01:00 JST）で `scheduled` ハンドラが起動し、
-`fetch_schedules` のうち `next_run_at` が到来したスケジュールを実行します。
+Docker Composeの`scheduler` serviceが既定5分間隔で、`fetch_schedules`のうち
+`next_run_at`が到来したスケジュールを実行します。実行対象はDB上で原子的にclaimし、
+取得失敗時は既定1時間後に再試行します。
 `approval_required = true` の場合は `staged_ingestions`（承認待ち）に保存し、
 `POST /api/staged-ingestions/{id}/approve` で本番反映します。
 未更新・取得失敗は `notify_channels`（teams / slack）へ Webhook 通知されます
 （環境変数: `NOTIFY_TEAMS_URL` / `NOTIFY_SLACK_URL`）。
+
+Cloudflare Workerにも互換用`scheduled` handlerを残していますが、Local PostgreSQLを正本とする
+現在のCloudflare構成は`READ_ONLY_MODE=true`のため、Cron書き込みを実行しません。
 
 ## POST /api/export/report
 

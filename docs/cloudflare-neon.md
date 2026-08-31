@@ -1,4 +1,6 @@
-# Cloudflare / Neon 構成
+# Cloudflare / Neon 互換経路
+
+LAN業務データの正本はADR-003によりLocal PostgreSQLである。本書はLocal PostgreSQLへ直接到達できないCloudflare Workerの互換経路を扱う。
 
 ## 1. 本番構成（v0.1.0 / 2026-07-31）
 
@@ -63,19 +65,19 @@ API 用サブドメイン（例: `api.ccid.mirai-dx-platform.com`）は未設定
 
 利用者指示により、当面は本機の自動割当IP＋ポートで稼働する（systemd 常駐）。
 
-- 構成: Docker Compose（`cci-api` / `cci-web`）+ systemd `cci.service`（起動時自動起動）
+- 構成: Docker Compose（`db` / `migrate` / `api` / `web`）+ systemd `cci.service`（起動時自動起動）
 - Web: `http://<自動割当IP>:3000` / API 直接: `http://<自動割当IP>:18000`
-- DB: Neon（`civil-cost-index-dashboard`、ap-southeast-1）を正本として接続
+- DB: Local PostgreSQL 17（pgvector）をLAN業務データ正本として接続
 - 環境ファイル: `/etc/cci/cci.env`（root のみ読取可）
-- Cloudflare Workers（`cci-api-production` / `cci-web-assets`）は一時プレビューとして維持
+- Cloudflare Workers + Neonは互換経路として維持し、Local PostgreSQLとの自動同期は行わない
 
 ## 5.2 Migration / Rollback（要約）
 
 詳細は `docs/release-checklist.md` 参照。
 
-- Forward: `npm run db:migrate`（冪等・後方互換 SQL のみ）
-- Rollback: アプリ側を旧バージョンへ切替（Docker image / `wrangler rollback`）。DB は Neon PITR / ブランチで復旧
+- Forward: Local Backup取得後、`docker compose run --rm migrate`（checksum付き適用台帳）
+- Rollback: アプリ側を旧versionへ切替。DBは別名DBへのRestore検証後、Human Gateを経て切替
 - 破壊的マイグレーション（DROP / TRUNCATE / RESET）は承認なしに実行しない
 
-- GitHub Actions `Deploy`（`.github/workflows/deploy.yml`）: main push 時に API・Web をデプロイ
+- GitHub Actions `Deploy Cloudflare (manual)`（`.github/workflows/deploy.yml`）: `workflow_dispatch`でAPI・Webをデプロイ
 - デプロイトークン: `CLOUDFLARE_API_TOKEN`（GitHub Secret）

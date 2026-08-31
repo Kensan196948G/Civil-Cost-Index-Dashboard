@@ -2,99 +2,71 @@
 
 ## 1. 方針
 
-- 業務データ正本は Neon PostgreSQL
-- Neon の自動バックアップ（ポイントインタイムリカバリ）を基本とする
-- 定期的な論理バックアップ（pg_dump）を**自動ジョブ**で実行（手動推奨ではなく運用標準）
-- コード・設定は Git リポジトリ（GitHub）が正本
-- 目標値（要運用承認）: RPO = 24時間以内 / RTO = 4時間以内（仮）
+- LAN業務データの正本はDocker ComposeのLocal PostgreSQLとする。
+- 毎日`pg_dump` custom formatを取得し、社内NAS等の別媒体へ複製する。
+- 最低7世代を保持し、四半期に1回以上、別名の検証DBへRestoreする。
+- 目標値（要運用承認）はRPO 24時間以内、RTO 4時間以内とする。
+- Cloudflare Worker互換経路のNeonは別系統でBackup/PITRを管理し、自動同期先とは扱わない。
 
-## 1.1 自動バックアップ（systemd timer 例）
+## 2. Local PostgreSQLのBackup
 
-本機（LAN）運用で毎日 03:30 JST に論理バックアップを取得する例:
+Repository rootで次を実行する。出力は既定で`artifacts/backups/`に作成され、権限は`0600`相当になる。
 
-`/etc/systemd/system/cci-backup.service`
+```bash
+COMPOSE_PROJECT_NAME=cci ./scripts/backup-local-postgres.sh
+```
+
+Scriptは`pg_dump -F c`実行後にファイルが空でないことと`pg_restore --list`を検証する。
+BackupファイルはGitへ追加せず、権限制御された別媒体へ複製する。
+
+## 3. Restore Drill
+
+本番DB`cci`へ直接Restoreしない。Backupを新規の`cci_restore_verify_*` DBへ復元して、Migration数とTable数を確認する。
+
+```bash
+COMPOSE_PROJECT_NAME=cci \
+  CCI_RESTORE_DATABASE=cci_restore_verify_20260831 \
+  ./scripts/verify-local-restore.sh artifacts/backups/cci-YYYYMMDD-HHMMSS.dump
+```
+
+検証DBは証跡確認のため自動削除しない。削除は対象名・Backup・検証結果を確認したうえで、運用者が明示的に承認して実施する。
+
+Restore後は次を追加確認する。
+
+- `/api/health/ready`が200を返すこと
+- 品目・地域・時系列のReadが成功すること
+- 検証用案件の作成・積算・削除が成功すること
+- `schema_migrations`が19件で、適用済みchecksumに不一致がないこと
+
+## 4. 自動Backup
+
+本機で毎日03:30 JSTに取得するsystemd timer例を示す。
 
 ```ini
 [Unit]
-Description=CCI PostgreSQL logical backup
-After=network-online.target docker.service
-Wants=network-online.target
+Description=CCI Local PostgreSQL logical backup
+After=docker.service
 
 [Service]
 Type=oneshot
-EnvironmentFile=/etc/cci/cci.env
-ExecStart=/usr/local/bin/cci-backup.sh
+WorkingDirectory=/opt/cci
+Environment=COMPOSE_PROJECT_NAME=cci
+Environment=CCI_BACKUP_DIR=/var/backups/cci
+ExecStart=/opt/cci/scripts/backup-local-postgres.sh
 ```
 
-`/usr/local/bin/cci-backup.sh`
+Timerは`OnCalendar=*-*-* 03:30:00`、`Persistent=true`とし、失敗通知を監視へ接続する。
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-STAMP="$(date +%Y%m%d-%H%M)"
-OUT=/var/backups/cci
-mkdir -p "$OUT"
-pg_dump "$DATABASE_URL_DIRECT" -F c -f "$OUT/cci-$STAMP.dump"
-find "$OUT" -name 'cci-*.dump' -mtime +7 -delete
-```
+## 5. 障害復旧
 
-`/etc/systemd/system/cci-backup.timer`
+1. APIへのWriteを停止する。
+2. 対象Backupの日時・size・`pg_restore --list`結果を確認する。
+3. 別名DBへRestoreし、主要Read/Writeと件数を検証する。
+4. 本番`cci`の置換が必要な場合は、最新BackupとRollback方法を提示してHuman Gateを得る。
+5. 切替後にReady、主要業務Flow、監査ログ、Backup jobを確認する。
 
-```ini
-[Unit]
-Description=Daily CCI backup at 03:30 JST
+Production DBのDROP、既存DBへの上書きRestore、volume削除は破壊的操作であり、承認なしに実施しない。
 
-[Timer]
-OnCalendar=*-*-* 03:30:00
-Persistent=true
+## 6. Cloudflare互換経路
 
-[Install]
-WantedBy=timers.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now cci-backup.timer
-sudo systemctl list-timers cci-backup.timer
-```
-
-Cloudflare Workers 構成では、Neon のポイントインタイムリカバリに加え、外部ストレージ
-（社内 NAS / クラウド）への定期 pg_dump を GitHub Actions の scheduled workflow 等で自動化する。
-
-## 1.2 定期リストア試験
-
-- 四半期に1回以上、最新バックアップを検証用DBへリストアし、ヘルスチェックと主要API（一覧・時系列・AI監査）で整合を確認する
-- 試験日・結果・担当者を運用ログ（リリースノートまたは管理台帳）に記録する
-- リストア失敗時はバックアップ世代の保持期間・監視アラートを見直す
-
-## 2. 論理バックアップ（推奨）
-
-```bash
-# Neon の接続文字列（DIRECT）が必要。秘密情報のため .dev.vars 等で管理
-cd apps/api
-export PGPASSWORD=...  # または DATABASE_URL_DIRECT を設定
-pg_dump "$DATABASE_URL_DIRECT" -F c -f backups/cci-$(date +%Y%m%d).dump
-```
-
-保管: ローカル or 社内ストレージ（最低 7 世代）
-
-## 3. リストア手順
-
-```bash
-# 新規DB or 空のDBへ
-pg_restore -d "$DATABASE_URL_DIRECT" backups/cci-YYYYMMDD.dump
-# または SQL 形式
-psql "$DATABASE_URL_DIRECT" -f backups/cci-YYYYMMDD.sql
-```
-
-## 4. Neon ポイントインタイムリカバリ
-
-1. Neon ダッシュボード > Branches > Restore
-2. 復旧時点を選択（デフォルト履歴保持 1 日）
-3. 復旧ブランチの接続文字列を取得し、動作確認後に切替
-
-## 5. 復旧時の注意
-
-- アプリの DATABASE_URL を新しい DB へ向ける（Worker Secret 更新）
-- 復旧後はヘルスチェックと主要APIでデータ整合を確認
-- 破壊的マイグレーションが原因の場合は、マイグレーション履歴との整合に注意
+Neon側はNeonのPITRと別媒体への`pg_dump`を使用する。復旧や接続先切替にはCloudflare Secret変更が伴うためHuman Gateとする。Local PostgreSQLとNeonのどちらが最新かを推測せず、最終更新時刻・件数・監査ログを比較してから切替判断を行う。

@@ -105,7 +105,7 @@ flowchart TB
 | API（直接） | <http://192.168.0.185:18000> | Hono API |
 | API（Web経由） | `http://192.168.0.185:3000/api/*` | 同一オリジンプロキシ（CORS不要） |
 
-systemd ユニット `cci.service` が起動時自動起動し、Docker Compose で api/web を常駐させています。
+systemd ユニット `cci.service` が起動時自動起動し、Docker Compose で PostgreSQL/API/Web を常駐させます。
 
 ### ☁️ Cloudflare（本番ドメイン）
 
@@ -114,7 +114,7 @@ systemd ユニット `cci.service` が起動時自動起動し、Docker Compose 
 | Web（本番ドメイン） | <https://ccid.mirai-dx-platform.com> | Cloudflare Access 適用済み（mirai-const.co.jp メール限定） |
 | API（バックエンド） | <https://cci-api-production.kensan1969.workers.dev> | Cloudflare Worker（Hono + Neon） |
 | API ヘルスチェック | <https://cci-api-production.kensan1969.workers.dev/api/health/ready> | DB接続含む死活確認 |
-| DB（正本） | Neon PostgreSQL（ap-southeast-1） | 接続情報は Cloudflare Secret で管理 |
+| DB（Cloudflare経路） | Neon PostgreSQL（ap-southeast-1） | Local PostgreSQLへ到達できないWorker用。接続情報はCloudflare Secretで管理 |
 
 未認証アクセスは Cloudflare Access のログインへリダイレクトされます。
 API Worker 直URL・LAN API への未認証アクセスは **401** を返します（`ALLOW_ANONYMOUS_VIEWER=false` が既定）。
@@ -133,8 +133,8 @@ flowchart LR
         CW["Workers 静的アセット<br/>ccid.mirai-dx-platform.com"] -->|"https /api"| CA["API Worker<br/>cci-api-production"]
         ACC["Cloudflare Access<br/>SSO + JWT"] -. 認証 .-> CW
     end
-    LA --> DB[("Neon PostgreSQL<br/>業務データ正本")]
-    CA --> DB
+    LA --> LDB[("Local PostgreSQL<br/>LAN業務データ正本")]
+    CA --> NDB[("Neon PostgreSQL<br/>Cloudflare互換経路")]
     ADM["システム管理者"] -->|"X-Admin-Key"| LA
     ADM -->|"X-Admin-Key"| CA
 ```
@@ -151,7 +151,7 @@ flowchart LR
     HASH --> TR["変換・正規化<br/>年月 / 数値 / 地域 / 品目"]
     TR --> MS["マスタ照合"]
     MS --> UPSERT["UPSERT 登録"]
-    UPSERT --> DB[("Neon DB")]
+    UPSERT --> DB[("PostgreSQL")]
     DB --> API["API 集計"]
     API --> UI["ダッシュボード / 積算画面"]
     TR -. "エラー行" .-> LOG["変換ログ・取込履歴"]
@@ -449,8 +449,8 @@ Cloudflare は `wrangler secret put` → `wrangler deploy` → `/api/ai/status` 
 | UI | Tailwind CSS | スタイリング |
 | グラフ | Apache ECharts | 時系列・比較グラフ |
 | バックエンド | Hono (TypeScript) on Cloudflare Workers | API・集計・取込・積算エンジン |
-| DB | Neon PostgreSQL 17（本番正本） | マスタ・時系列・履歴（pgvector含む） |
-| マイグレーション | SQL（`apps/api/migrations/` 001〜017） | スキーマ管理 |
+| DB | Local PostgreSQL 17（LAN正本）/ Neon（Worker互換経路） | マスタ・時系列・履歴（pgvector含む） |
+| マイグレーション | SQL（`apps/api/migrations/` 001〜019） | SHA-256付き適用台帳でスキーマ管理 |
 | CI/CD | GitHub Actions + Wrangler | テスト・ビルド・デプロイ |
 | 監視 | Workers Observability + ヘルスエンドポイント | ログ・死活確認 |
 
@@ -474,24 +474,36 @@ Civil-Cost-Index-Dashboard/
 
 ## 🚀 ローカル開発
 
-前提: Node.js 20+ / pnpm または npm / Wrangler の Cloudflare 認証。
+前提: Docker Engine + Compose。Native開発時はNode.js 22も使用します。
 
 ```bash
-# 1. 環境変数
-cp .env.example .env
-# apps/api/.dev.vars に DATABASE_URL / ADMIN_API_KEY を設定（gitignore対象）
+# Local PostgreSQL、Migration、Seed、API、Webを起動
+./scripts/init-local-env.sh
+docker compose up --build -d
+docker compose ps
+curl http://127.0.0.1:18000/api/health/ready
+```
 
-# 2. API（Hono Worker）
+Composeの`migrate` serviceはDBのhealth確認後にMigrationとサンプルSeedを実行します。
+Migrationは同じファイルを再適用せず、適用済みファイルの改変をchecksum不一致として停止します。
+
+Native API開発では、ComposeのDBをホスト側`127.0.0.1:15432`から使用します。
+
+```bash
+set -a
+source .env
+set +a
+
 cd apps/api
-npm install
-npm run db:migrate   # Neonへスキーマ適用（DATABASE_URL_DIRECT使用）
+npm ci
+npm run db:migrate
 npm run db:seed      # サンプルデータ投入（同一ハッシュはスキップ）
 npm run db:seed:demo # MVP確認用の架空案件・見積・積算・監査ログを冪等投入
 npm run dev          # http://localhost:8787
 
-# 3. Web（別ターミナル）
+# Web（別ターミナル）
 cd apps/web
-npm install
+npm ci
 NEXT_STATIC_EXPORT=0 npm run dev   # http://localhost:3000
 ```
 
@@ -521,13 +533,6 @@ npm run db:seed:demo
 `X-Admin-Key` 付きで実行されます。デモ目的で匿名閲覧を許可する場合のみ `ALLOW_ANONYMOUS_VIEWER=true` を設定してください。
 
 詳細な評価・優先順位・残課題は [docs/mvp-prototype-assessment-2026-08-13.md](docs/mvp-prototype-assessment-2026-08-13.md) を参照してください。
-
-または Docker Compose（本機LAN運用と同じ構成）:
-
-```bash
-cp .env.example .env
-docker compose up
-```
 
 ## 🧪 テスト・CI
 
@@ -562,8 +567,8 @@ gh workflow run "Deploy Cloudflare (manual)" --ref main
 # または開発ブランチを指定
 gh workflow run "Deploy Cloudflare (manual)" --ref fix/webui-root-react-app
 
-# 本機LAN（Dockerビルド → systemd再起動）
-docker compose build
+# 本機LAN（image build、構成/Seed/運用Script配置、systemd登録）
+sudo CCI_API_HOST_PORT=18000 bash infra/systemd/install.sh
 sudo systemctl restart cci
 ```
 
@@ -571,7 +576,8 @@ sudo systemctl restart cci
 
 | シークレット | 設定先 | 用途 |
 | --- | --- | --- |
-| `DATABASE_URL` | Cloudflare Worker Secret | Neon接続（pooled） |
+| `DATABASE_URL` | Cloudflare Worker Secret | Worker互換経路のNeon接続（pooled） |
+| `CCI_LOCAL_DATABASE_URL` | LAN `.env` | Docker Compose内のLocal PostgreSQL接続 |
 | `ADMIN_API_KEY` | Cloudflare Worker Secret + LAN `/etc/cci/cci.env` | 管理API（X-Admin-Key） |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | Cloudflare Worker Secret + LAN | AI生成（DeepSeek） |
 | `PERPLEXITY_API_KEY` / `PERPLEXITY_MODEL` | Cloudflare Worker Secret + LAN | AI生成（Perplexity） |

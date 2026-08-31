@@ -2,10 +2,10 @@
 
 ## 1. 稼働構成
 
-- Web: Cloudflare Workers 静的アセット（`cci-web-assets`）
-- API: Cloudflare Workers（`cci-api-production`）
-- DB: Neon PostgreSQL（`civil-cost-index-dashboard`）
-- 監視: Workers Observability（ダッシュボードの Workers > cci-api-production > Logs）
+- LAN正本: Docker ComposeのPostgreSQL 17 + API + Web
+- Cloudflare互換経路: Workers静的アセット + API Worker + Neon PostgreSQL
+- Local PostgreSQLとNeonの自動同期は行わない。LAN業務データはLocal PostgreSQLを正本とする。
+- 監視: Local `/api/health/ready`、Docker health、Cloudflare Workers Observability
 
 ## 2. ヘルスチェック
 
@@ -22,10 +22,7 @@ curl -o /dev/null -s -w '%{http_code}\n' https://ccid.mirai-dx-platform.com/
 
 ## 3. デプロイ
 
-### 自動（推奨）
-
-`main` ブランチへの push で GitHub Actions `Deploy` が実行される。
-成功条件: API Worker / Web Worker の両デプロイが green。
+Production deployはHuman Gateであり、`main`へのpushでは自動実行しない。
 
 ### 手動
 
@@ -50,10 +47,12 @@ sudo CCI_API_HOST_PORT=18000 bash infra/systemd/install.sh
 sudo systemctl start cci
 sudo systemctl status cci
 sudo docker compose -p cci -f /opt/cci/docker-compose.yml ps
+curl http://127.0.0.1:18000/api/health/ready
 ```
 
 - Web: `http://<自動割当IP>:3000`（例: http://192.168.0.185:3000）
 - API 直接: `http://<自動割当IP>:18000`
+- PostgreSQL: host `127.0.0.1:15432`のみ（LANへ公開しない）
 - 再起動後の自動起動: `systemctl is-enabled cci` → `enabled`
 
 ## 4. ログ確認
@@ -110,9 +109,11 @@ curl -X POST -H "X-Admin-Key: $ADMIN_API_KEY" \
 
 1. `APP_VERSION` / パッケージ version を更新
 2. 必要なら `apps/api/migrations/0NN_*.sql` を追加（既存の SQL は編集しない）
-3. `npm run db:migrate` を実行（破壊的変更は承認後）
-4. main に push → CI/CD でデプロイ
-5. リリースノートへ追記
+3. Backupを取得し、`docker compose run --rm migrate`でMigration/Seedを実行する
+4. `schema_migrations`の件数とchecksumエラーがないことを確認する
+5. PR/CI通過後にmainへSquash Mergeする
+6. Human Gate後に本機またはCloudflareへDeployし、主要Read/Writeを確認する
+7. リリースノートへ追記する
 
 ## 7. インシデント時の初動
 

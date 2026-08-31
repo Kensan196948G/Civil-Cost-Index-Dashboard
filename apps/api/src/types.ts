@@ -42,6 +42,8 @@ export type Env = {
   READ_ONLY_MODE?: string;
   /** 任意: 1分あたりのIP別リクエスト上限。0以下で無効。 */
   RATE_LIMIT_PER_MINUTE?: string;
+  /** 任意: true の場合は完了したHTTP requestを構造化JSONで記録する。 */
+  REQUEST_LOGGING?: string;
   /** 任意: Teams 受信Webhook URL */
   NOTIFY_TEAMS_URL?: string;
   /** 任意: Slack 受信Webhook URL */

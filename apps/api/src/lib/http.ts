@@ -49,6 +49,20 @@ export async function requestIdMiddleware(c: AppContext, next: Next) {
   await next();
 }
 
+export async function requestLogMiddleware(c: AppContext, next: Next) {
+  const startedAt = performance.now();
+  await next();
+  if (c.env.REQUEST_LOGGING !== "true") return;
+  console.log(JSON.stringify({
+    event: "http_request",
+    request_id: c.get("requestId"),
+    method: c.req.method,
+    path: c.req.path,
+    status: c.res.status,
+    duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
+  }));
+}
+
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
 export async function securityHeadersMiddleware(c: AppContext, next: Next): Promise<Response | void> {

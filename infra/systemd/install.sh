@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Civil Cost Index Dashboard - systemd installer (Local PostgreSQL + API + Web)
+# Civil Cost Index Dashboard - systemd installer (Local PostgreSQL + API + Scheduler + Web)
 # Usage: sudo CCI_API_HOST_PORT=18000 bash infra/systemd/install.sh
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

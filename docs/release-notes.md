@@ -2,6 +2,9 @@
 
 ## Unreleased（2026-08-31: Local PostgreSQL運用の再現性）
 
+- request ID・status・durationを含む構造化HTTP logと月次P50/P95/P99・5xx率集計CLIを追加
+- データ鮮度を計画周期の2倍で判定し、failed/partial_success取込の通知を追加
+- Local API/Scheduler/Web logを10MB×5世代へrotation
 - Local PostgreSQL向けの常駐scheduler serviceを追加し、期限到来した定期取得を既定5分間隔で実行
 - scheduleを原子的にclaimして多重実行を抑止し、取得失敗を成功件数へ含めず既定1時間後に再試行
 - LAN業務データ正本として`pgvector/pgvector:pg17`をDocker Composeへ追加

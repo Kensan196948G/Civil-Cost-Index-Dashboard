@@ -48,6 +48,7 @@ const env = {
   ALLOW_ANONYMOUS_VIEWER: process.env.ALLOW_ANONYMOUS_VIEWER ?? "",
   READ_ONLY_MODE: process.env.READ_ONLY_MODE ?? "",
   RATE_LIMIT_PER_MINUTE: process.env.RATE_LIMIT_PER_MINUTE ?? "",
+  REQUEST_LOGGING: process.env.REQUEST_LOGGING ?? "true",
   AI_ROUTING: process.env.AI_ROUTING ?? "",
 };
 

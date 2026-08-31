@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeNextRun } from "../src/lib/scheduler";
+import { computeNextRun, staleThresholdDays } from "../src/lib/scheduler";
 import { parseSchedulerSeconds, runSchedulerLoop } from "../src/lib/schedulerLoop";
 
 describe("computeNextRun", () => {
@@ -26,6 +26,17 @@ describe("computeNextRun", () => {
     const next = computeNextRun("yearly", 1, base);
     expect(next.getFullYear()).toBe(2027);
     expect(next.getDate()).toBe(1);
+  });
+});
+
+describe("staleThresholdDays", () => {
+  it.each([
+    ["daily", null, 2],
+    ["monthly", null, 62],
+    ["yearly", null, 730],
+    ["monthly", 40, 80],
+  ])("uses twice the planned interval for %s", (type, expected, threshold) => {
+    expect(staleThresholdDays(type, expected)).toBe(threshold);
   });
 });
 

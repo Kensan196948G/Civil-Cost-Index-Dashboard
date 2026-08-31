@@ -28,6 +28,15 @@ export function computeNextRun(
   return next;
 }
 
+export function staleThresholdDays(
+  scheduleType: string,
+  expectedIntervalDays: number | null
+): number {
+  const plannedDays = expectedIntervalDays
+    ?? (scheduleType === "monthly" ? 31 : scheduleType === "yearly" ? 365 : 1);
+  return plannedDays * 2;
+}
+
 async function notifiedRecently(sql: Sql, key: string, hours = 24): Promise<boolean> {
   const rows = await sql`
     SELECT id FROM notifications_log
@@ -43,7 +52,7 @@ export async function runScheduledJobs(
   env: Env,
   now: Date = new Date(),
   options: { leaseSeconds?: number; retrySeconds?: number } = {}
-): Promise<{ ran: number; failed: number; stale_notified: number }> {
+): Promise<{ ran: number; failed: number; stale_notified: number; fetch_failures_notified: number }> {
   const leaseSeconds = options.leaseSeconds ?? 900;
   const retrySeconds = options.retrySeconds ?? 3600;
   const leaseUntil = new Date(now.getTime() + leaseSeconds * 1000);
@@ -100,7 +109,7 @@ export async function runScheduledJobs(
   `;
   let staleNotified = 0;
   for (const s of active) {
-    const intervalDays = s.expected_interval_days ?? (s.schedule_type === "monthly" ? 40 : s.schedule_type === "yearly" ? 400 : 2);
+    const intervalDays = staleThresholdDays(s.schedule_type, s.expected_interval_days);
     const channels = Array.isArray(s.notify_channels) ? (s.notify_channels as string[]) : ["teams", "slack"];
     const sourceKey = `[CCI] 未更新: ${s.source_name}`;
     if (await notifiedRecently(sql, sourceKey)) continue;
@@ -116,7 +125,38 @@ export async function runScheduledJobs(
       }
     }
   }
-  return { ran, failed, stale_notified: staleNotified };
+
+  const failedJobs = await sql`
+    SELECT sf.id, sf.file_name, ds.source_name, tl.transform_status,
+           tl.success_rows, tl.error_rows
+    FROM transform_logs tl
+    JOIN source_files sf ON sf.id = tl.source_file_id
+    JOIN data_sources ds ON ds.id = sf.data_source_id
+    WHERE tl.transform_status IN ('failed', 'partial_success')
+      AND COALESCE(tl.finished_at, tl.created_at) >= ${new Date(now.getTime() - 86_400_000)}
+    ORDER BY COALESCE(tl.finished_at, tl.created_at) DESC
+    LIMIT 100
+  `;
+  let fetchFailuresNotified = 0;
+  for (const job of failedJobs) {
+    const subject = `[CCI] 取込エラー: ${job.id}`;
+    if (await notifiedRecently(sql, subject)) continue;
+    await notify(
+      sql,
+      env,
+      ["teams", "slack"],
+      subject,
+      `${job.source_name} / ${job.file_name}: ${job.transform_status}（成功 ${job.success_rows ?? 0} / エラー ${job.error_rows ?? 0}）`
+    );
+    fetchFailuresNotified++;
+  }
+
+  return {
+    ran,
+    failed,
+    stale_notified: staleNotified,
+    fetch_failures_notified: fetchFailuresNotified,
+  };
 }
 
 export function schedulesForNextRun(now: Date): Date[] {

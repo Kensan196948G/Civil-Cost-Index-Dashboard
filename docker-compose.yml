@@ -47,6 +47,7 @@ services:
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
       ALLOW_ANONYMOUS_VIEWER: ${ALLOW_ANONYMOUS_VIEWER:-false}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-180}
+      REQUEST_LOGGING: ${REQUEST_LOGGING:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
@@ -71,6 +72,11 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   scheduler:
     image: civil-cost-index-dashboard-api:latest
@@ -96,6 +102,11 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   web:
     image: civil-cost-index-dashboard-web:latest
@@ -118,6 +129,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   cci_postgres_data:

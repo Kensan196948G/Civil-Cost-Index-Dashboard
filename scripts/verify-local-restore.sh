@@ -11,9 +11,10 @@ project_name="${COMPOSE_PROJECT_NAME:-cci}"
 restore_database="${CCI_RESTORE_DATABASE:-cci_restore_verify_$(date +%Y%m%d%H%M%S)}"
 api_container="${project_name}-${restore_database}-api"
 drill_admin_key="restore-drill-local-only"
+api_started=false
 
 cleanup() {
-  if docker container inspect "$api_container" >/dev/null 2>&1; then
+  if [[ "$api_started" == "true" ]] && docker container inspect "$api_container" >/dev/null 2>&1; then
     docker container stop --time 10 "$api_container" >/dev/null
   fi
 }
@@ -58,6 +59,7 @@ DATABASE_URL="$restore_database_url" DATABASE_URL_DIRECT="$restore_database_url"
 DATABASE_URL="$restore_database_url" ADMIN_API_KEY="$drill_admin_key" \
   docker compose -p "$project_name" run --rm --no-deps -d --name "$api_container" \
   -e DATABASE_URL -e ADMIN_API_KEY -e ALLOW_ANONYMOUS_VIEWER=false api >/dev/null
+api_started=true
 
 ready=false
 for _ in $(seq 1 30); do

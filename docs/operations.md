@@ -64,6 +64,19 @@ curl http://127.0.0.1:18000/api/health/ready
 - Local PostgreSQLの業務データは既存のPostgreSQLデータvolumeに保存されます。再installやvolume再作成でも
   既存volumeが削除されることはありません（`docker volume ls | grep cci` で要確認）。
 
+**2026-09-10 復旧実績（本機の実測）**
+
+- 本機ではポート3000（不明プロセス）と3001（`cci-api-mvp.service` が占有）のため、Webは **`CCI_WEB_HOST_PORT=3005`**
+  で稼働中: Web `http://192.168.0.185:3005` / API `http://192.168.0.185:18000`
+- `/etc/cci/cci.env` には旧期から `BASIC_AUTH_USERNAME/PASSWORD` が設定されており、**API全体のBasic認証ゲートが有効**。
+  ブラウザ初回アクセス時はBasic認証、管理操作は設定画面でAdmin Key（X-Admin-Key）を入力する。
+  なお resolveIdentity は X-Admin-Key を Basic より優先判定する（PR #71）ため、管理画面の管理者キーはBasic併用下でも機能する。
+- 再install後の新volume（`cci_cci_postgres_data`）は Seed＋公式データ（時系列200行・地域56・データソース7・
+  Migration 21件）で、旧volumeの内容と同水準だったためリストア不要だった。旧volume
+  （`cci-series-test_cci_postgres_data`）は削除せず保全し、dump も `/tmp/cci-dump/cci-business.sql` に取得済み。
+- 既存の `cci-api-cloudflared.service`（`cci-api.mirai-dx-platform.com` → localhost:18804）は**別API（MVP系）への
+  Tunnel**であり、本API(18000)とは未接続。Cloudflare API WorkerのDB経路として使う場合は別途設計が必要。
+
 ## 4. ログ確認
 
 ```bash

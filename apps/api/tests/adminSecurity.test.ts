@@ -1,10 +1,47 @@
 import { describe, expect, it } from "vitest";
 import { requireAdmin, timingSafeEqualStrings, type AppContext } from "../src/lib/http";
-import { resolveIdentity, type AuthContext } from "../src/lib/auth";
+import { resolveIdentity, ALL_ROLES, type AuthContext } from "../src/lib/auth";
+import { recordAudit } from "../src/lib/audit";
 import type { Env } from "../src/types";
 import type { Sql } from "../src/lib/db";
 
 const sqlUnused: Sql = async () => [];
+
+function makeCapturingSql(): { sql: Sql; values: unknown[][] } {
+  const values: unknown[][] = [];
+  const fn = ((strings: TemplateStringsArray, ...vals: unknown[]) => {
+    values.push(vals);
+    return Promise.resolve([] as Array<Record<string, unknown>>);
+  }) as unknown as Sql;
+  return { sql: fn, values };
+}
+
+describe("recordAudit representative role", () => {
+  it("records system_admin as the representative role for admin-key identities", async () => {
+    const { sql, values } = makeCapturingSql();
+    await recordAudit(
+      sql,
+      { email: "admin-key", display_name: null, roles: [...ALL_ROLES], source: "admin-key" },
+      "user.create",
+      "user",
+      "u1",
+      { email: "x@x.jp" }
+    );
+    expect(values[0]?.[1]).toBe("system_admin");
+  });
+
+  it("records the first role for limited-role identities", async () => {
+    const { sql, values } = makeCapturingSql();
+    await recordAudit(sql, { email: "taro@example.com", display_name: null, roles: ["estimator", "viewer"], source: "access-jwt" }, "estimate.calculate");
+    expect(values[0]?.[1]).toBe("estimator");
+  });
+
+  it("falls back to viewer for empty roles", async () => {
+    const { sql, values } = makeCapturingSql();
+    await recordAudit(sql, { email: "anonymous", display_name: null, roles: [], source: "anonymous" }, "read.view");
+    expect(values[0]?.[1]).toBe("viewer");
+  });
+});
 
 function makeCtx(envOverrides: Partial<Env> = {}, headers: Record<string, string> = {}): AppContext {
   return {

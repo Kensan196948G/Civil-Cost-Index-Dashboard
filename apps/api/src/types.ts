@@ -6,6 +6,8 @@ export type WorkersAiBinding = {
 export type Env = {
   DATABASE_URL: string;
   ADMIN_API_KEY: string;
+  /** 任意: 環境種別（production のとき管理者キー未設定の管理API通過を禁止する） */
+  APP_ENV?: string;
   CORS_ORIGINS: string;
   APP_VERSION: string;
   BASIC_AUTH_USERNAME?: string;

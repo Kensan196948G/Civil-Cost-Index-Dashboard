@@ -6,4 +6,4 @@ overrides:
   js-yaml: 4.3.1
   nanoid: 3.3.18
   postcss: $postcss
-  sharp: ^0.35.3
+  sharp: ^0.35.4

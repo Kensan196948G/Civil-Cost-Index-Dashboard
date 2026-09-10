@@ -20,15 +20,41 @@ function check(name, ok, detail = "") {
 const browser = await chromium.launch({ executablePath: EXECUTABLE, headless: true, args: ["--no-sandbox"] });
 
 const consoleErrors = [];
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+// 認証付きpreview確認用の任意環境変数:
+//   CCI_E2E_BASIC_USER / CCI_E2E_BASIC_PASSWORD … API全体のBasic認証ゲート（LAN運用相当）
+//   CCI_E2E_ADMIN_KEY … 管理画面（X-Admin-Key）用キー。localStorageの cci-prefs に事前投入する
+const BASIC_USER = process.env.CCI_E2E_BASIC_USER ?? "";
+const BASIC_PASSWORD = process.env.CCI_E2E_BASIC_PASSWORD ?? "";
+const ADMIN_KEY = process.env.CCI_E2E_ADMIN_KEY ?? "";
+
+function pageOptions() {
+  return BASIC_USER && BASIC_PASSWORD
+    ? { httpCredentials: { username: BASIC_USER, password: BASIC_PASSWORD } }
+    : {};
+}
+
+function applyAdminKeyInit(p) {
+  if (!ADMIN_KEY) return Promise.resolve();
+  return p.addInitScript((key) => {
+    try {
+      const prefs = JSON.parse(localStorage.getItem("cci-prefs") || "{}");
+      prefs.adminKey = key;
+      localStorage.setItem("cci-prefs", JSON.stringify(prefs));
+    } catch {}
+  }, ADMIN_KEY);
+}
+
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, ...pageOptions() });
+await applyAdminKeyInit(page);
 page.on("console", (m) => {
   if (m.type() === "error") consoleErrors.push(m.text());
 });
 page.on("pageerror", (e) => consoleErrors.push(String(e)));
 
 async function goto(path) {
-  await page.goto(BASE + path, { waitUntil: "networkidle", timeout: 30000 });
-  await page.waitForTimeout(1200);
+  // networkidle はダッシュボード等の定期fetchで不確定になるため domcontentloaded + 描画待ちに統一
+  await page.goto(BASE + path, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForTimeout(1500);
 }
 
 // 1. トップダッシュボード（standalone デザイン準拠・ライトモード）
@@ -80,7 +106,7 @@ check("table: 行データ", (await page.locator("tbody tr").count()) >= 1);
 await goto("/export");
 check("export: 見出し", (await page.getByRole("heading", { name: "レポート出力" }).count()) === 1);
 check("export: CSVボタン", (await page.getByRole("button", { name: /CSV出力/ }).count()) >= 1);
-check("export: PDF準備中表記", (await page.getByText("準備中", { exact: false }).count()) >= 1);
+check("export: PDF出力ボタン", (await page.getByRole("button", { name: "PDF出力" }).count()) >= 1);
 
 // 6. 管理: データソース
 await goto("/admin/data-sources");
@@ -98,9 +124,10 @@ check("settings: 見出し", (await page.getByRole("heading", { name: "ユーザ
 check("settings: 保存ボタン", (await page.getByRole("button", { name: "保存" }).count()) === 1);
 
 // 9. モバイル表示（375px）
-const mobile = await browser.newPage({ viewport: { width: 375, height: 667 } });
-await mobile.goto(BASE + "/", { waitUntil: "networkidle", timeout: 30000 });
-await mobile.waitForTimeout(1200);
+const mobile = await browser.newPage({ viewport: { width: 375, height: 667 }, ...pageOptions() });
+await applyAdminKeyInit(mobile);
+await mobile.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 30000 });
+await mobile.waitForTimeout(1500);
 const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 check("mobile: 横スクロールなし", !overflow, overflow ? `scrollWidth=${overflow}` : "");
 check("mobile: 表示", (await mobile.getByText("Civil Cost Index", { exact: false }).count()) >= 1);

@@ -81,10 +81,10 @@ describe("resolveIdentity admin key (timing-safe path)", () => {
     APP_ENV: "production",
   };
 
-  function authCtx(headers: Record<string, string>): AuthContext {
+  function authCtx(headers: Record<string, string>, envOverrides: Partial<Env> = {}): AuthContext {
     return {
       req: { header: (name: string) => headers[name] },
-      env,
+      env: { ...env, ...envOverrides },
     } as unknown as AuthContext;
   }
 
@@ -98,5 +98,39 @@ describe("resolveIdentity admin key (timing-safe path)", () => {
     const id = await resolveIdentity(authCtx({ "X-Admin-Key": "wrong-key" }), sqlUnused);
     expect(id.source).toBe("anonymous");
     expect(id.roles).toEqual([]);
+  });
+
+  it("admin key takes precedence over the Basic gate (LAN management UI usable)", async () => {
+    // Basic認証環境でも X-Admin-Key が一致するリクエストは管理者として扱う（README仕様）
+    const id = await resolveIdentity(
+      authCtx(
+        { "X-Admin-Key": "secret-key", Authorization: `Basic ${btoa("cci:pass")}` },
+        { BASIC_AUTH_USERNAME: "cci", BASIC_AUTH_PASSWORD: "pass" }
+      ),
+      sqlUnused
+    );
+    expect(id.source).toBe("admin-key");
+    expect(id.roles).toContain("system_admin");
+  });
+
+  it("Basic-only requests still resolve as viewer when admin key is missing", async () => {
+    const id = await resolveIdentity(
+      authCtx({ Authorization: `Basic ${btoa("cci:pass")}` }, { BASIC_AUTH_USERNAME: "cci", BASIC_AUTH_PASSWORD: "pass" }),
+      sqlUnused
+    );
+    expect(id.source).toBe("basic-auth");
+    expect(id.roles).toEqual(["viewer"]);
+  });
+
+  it("wrong admin key with Basic credentials falls back to Basic viewer (not anonymous)", async () => {
+    const id = await resolveIdentity(
+      authCtx(
+        { "X-Admin-Key": "wrong-key", Authorization: `Basic ${btoa("cci:pass")}` },
+        { BASIC_AUTH_USERNAME: "cci", BASIC_AUTH_PASSWORD: "pass" }
+      ),
+      sqlUnused
+    );
+    expect(id.source).toBe("basic-auth");
+    expect(id.roles).toEqual(["viewer"]);
   });
 });

@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "echarts": "^6.1.0",
-    "next": "^15.5.0",
+    "next": "^15.5.24",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
@@ -32,14 +32,14 @@
     "js-yaml": "4.3.1",
     "nanoid": "3.3.18",
     "postcss": "$postcss",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   },
   "pnpm": {
     "overrides": {
       "js-yaml": "4.3.1",
       "nanoid": "3.3.18",
       "postcss": "$postcss",
-      "sharp": "^0.35.3"
+      "sharp": "^0.35.4"
     }
   }
 }

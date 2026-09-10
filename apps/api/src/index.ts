@@ -11,6 +11,7 @@ import {
   requestIdMiddleware,
   requestLogMiddleware,
   securityHeadersMiddleware,
+  timingSafeEqualStrings,
   type AppContext,
 } from "./lib/http";
 import { getSql } from "./lib/db";
@@ -2378,7 +2379,7 @@ app.post("/api/ai/feedback", async (c) => {
 app.get("/api/ai/audit", async (c) => {
   const aiKey = c.req.header("X-AI-Key")?.trim() ?? "";
   const serverKey = (c.env.DEEPSEEK_API_KEY ?? "").trim();
-  const aiKeyValid = serverKey !== "" && aiKey === serverKey;
+  const aiKeyValid = serverKey !== "" && timingSafeEqualStrings(aiKey, serverKey);
   if (!aiKeyValid && !requireAdmin(c)) {
     return fail(c, "UNAUTHORIZED", "管理者キーまたはDeepSeek APIキーが必要です。", 401);
   }

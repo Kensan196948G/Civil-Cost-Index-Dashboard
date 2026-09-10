@@ -1,5 +1,6 @@
 import type { Env } from "../types";
 import type { Sql } from "./db";
+import { timingSafeEqualStrings } from "./http";
 
 export const ALL_ROLES = [
   "viewer",
@@ -142,7 +143,7 @@ export async function resolveIdentity(
   if (basic.startsWith("Basic ")) {
     const basicUser = (c.env.BASIC_AUTH_USERNAME || "").trim();
     const basicPass = (c.env.BASIC_AUTH_PASSWORD || "").trim();
-    if (basicUser && basicPass && basic === `Basic ${btoa(`${basicUser}:${basicPass}`)}`) {
+    if (basicUser && basicPass && timingSafeEqualStrings(basic, `Basic ${btoa(`${basicUser}:${basicPass}`)}`)) {
       return {
         email: "basic-auth",
         display_name: "Basic認証（LANゲート）",
@@ -153,7 +154,7 @@ export async function resolveIdentity(
   }
 
   const adminKey = c.req.header("X-Admin-Key") ?? "";
-  if (adminKey && adminKey === (c.env.ADMIN_API_KEY ?? "").trim()) {
+  if (adminKey && timingSafeEqualStrings(adminKey, (c.env.ADMIN_API_KEY ?? "").trim())) {
     return {
       email: "admin-key",
       display_name: "システム管理者（Admin Key）",

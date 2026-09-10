@@ -13,6 +13,20 @@ export type ErrorBody = {
   details?: unknown[];
 };
 
+/**
+ * 文字列を内容依存の早期脱出なしに比較する（timing-safe比較）。
+ * 長さ情報は漏れ得るため、長さが異なる場合はその差を比較値に混入させる。
+ * 管理キー・APIキー等の共有シークレット比較に使用する。
+ */
+export function timingSafeEqualStrings(a: string, b: string): boolean {
+  let diff = a.length === b.length ? 0 : 1;
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
 export function ok<T>(c: AppContext, data: T, status: ContentfulStatusCode = 200) {
   return c.json(
     {
@@ -107,7 +121,7 @@ export async function basicAuthMiddleware(c: AppContext, next: Next): Promise<Re
 
   const header = c.req.header("Authorization") || "";
   const expected = "Basic " + btoa(`${user}:${pass}`);
-  if (header !== expected) {
+  if (!timingSafeEqualStrings(header, expected)) {
     c.header("WWW-Authenticate", 'Basic realm="cci", charset="UTF-8"');
     return fail(c, "UNAUTHORIZED", "Basic認証が必要です。", 401);
   }
@@ -125,7 +139,7 @@ export async function corsMiddleware(c: AppContext, next: Next): Promise<Respons
     c.header("Access-Control-Allow-Origin", allowAll ? "*" : origin);
     if (!allowAll) c.header("Vary", "Origin");
     c.header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
-    c.header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
+    c.header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, X-AI-Key");
     c.header("Access-Control-Max-Age", "86400");
   }
   if (c.req.method === "OPTIONS") {
@@ -136,9 +150,12 @@ export async function corsMiddleware(c: AppContext, next: Next): Promise<Respons
 
 export function requireAdmin(c: AppContext) {
   const configured = (c.env.ADMIN_API_KEY || "").trim();
-  if (!configured) return true;
-  const provided = c.req.header("X-Admin-Key") || "";
-  return provided === configured;
+  if (!configured) {
+    // 本番環境では管理者キー未設定の管理API通過を禁止する（fail closed）。
+    // 開発・デモ環境のみキーなし通過を許可する（従来の開発用フォールバック）。
+    return c.env.APP_ENV !== "production";
+  }
+  return timingSafeEqualStrings(c.req.header("X-Admin-Key") || "", configured);
 }
 
 export function toErrorBody(e: unknown): ErrorBody {

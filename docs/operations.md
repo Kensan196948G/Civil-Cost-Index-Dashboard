@@ -3,8 +3,9 @@
 ## 1. 稼働構成
 
 - LAN正本: Docker ComposeのPostgreSQL 17 + API + Scheduler + Web
-- Cloudflare互換経路: Workers静的アセット + API Worker + Neon PostgreSQL
-- Local PostgreSQLとNeonの自動同期は行わない。LAN業務データはLocal PostgreSQLを正本とする。
+- Cloudflare互換経路: Workers静的アセット + API Worker（DB接続は現在停止中。Neonは2026-09に利用停止）
+- Local PostgreSQLとNeonの自動同期は行わない。LAN業務データはLocal PostgreSQLを正本とする（Neonは今後使用しない）。
+- Cloudflare API WorkerのDB接続経路（Cloudflare Tunnel経由でLAN APIへ到達する等）は設計判断のため要承認。
 - 監視: Local `/api/health/ready`、Docker health、Cloudflare Workers Observability
 
 ## 2. ヘルスチェック
@@ -52,6 +53,16 @@ curl http://127.0.0.1:18000/api/health/ready
 - API 直接: `http://<自動割当IP>:18000`
 - PostgreSQL: host `127.0.0.1:15432`のみ（LANへ公開しない）
 - 再起動後の自動起動: `systemctl is-enabled cci` → `enabled`
+
+**復旧時の注意（2026-09 Deep Debug時点の実機観察）**
+
+- ポート3000が他プロセス（別プロジェクトの常駐プロセス等）に占有されている場合、Webコンテナのポートバインドが
+  失敗します。`CCI_WEB_HOST_PORT` で別ポートを指定して起動してください。
+- `/opt/cci/docker-compose.yml` が旧構成（api+webのみ・DATABASE_URL直参照＝Neon参照）のまま残っている場合、
+  systemd起動では最新の db+migrate+scheduler 構成になりません。`infra/systemd/install.sh` を再実行して
+  `/opt/cci` と systemd ユニットを最新化してください（sudo権限が必要なためHuman Gate）。
+- Local PostgreSQLの業務データは既存のPostgreSQLデータvolumeに保存されます。再installやvolume再作成でも
+  既存volumeが削除されることはありません（`docker volume ls | grep cci` で要確認）。
 
 ## 4. ログ確認
 

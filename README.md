@@ -107,14 +107,20 @@ flowchart TB
 
 systemd ユニット `cci.service` が起動時自動起動し、Docker Compose で PostgreSQL/API/Scheduler/Web を常駐させます。
 
+> **運用メモ（2026-09 Deep Debug時点）**
+> - ポート3000を他プロセスが占有している場合は `CCI_WEB_HOST_PORT` で別ポートを指定して起動できます。
+> - `/opt/cci/docker-compose.yml` が旧構成（api+webのみ・Neon参照）のまま残っている場合、`infra/systemd/install.sh`
+>   の再実行で `/opt/cci` と systemd ユニットを最新化する必要があります（sudo権限が必要なためHuman Gate）。
+>   Local PostgreSQLの業務データは既存のPostgreSQLデータvolumeに保存されており、再installでは消えません。
+
 ### ☁️ Cloudflare（本番ドメイン）
 
 | 対象 | URL | 備考 |
 | --- | --- | --- |
 | Web（本番ドメイン） | <https://ccid.mirai-dx-platform.com> | Cloudflare Access 適用済み（mirai-const.co.jp メール限定） |
-| API（バックエンド） | <https://cci-api-production.kensan1969.workers.dev> | Cloudflare Worker（Hono + Neon）。読み取り専用設定は次回承認Deployで反映 |
+| API（バックエンド） | <https://cci-api-production.kensan1969.workers.dev> | Cloudflare Worker（Hono）。読み取り専用設定（READ_ONLY_MODE） |
 | API ヘルスチェック | <https://cci-api-production.kensan1969.workers.dev/api/health/ready> | DB接続含む死活確認 |
-| DB（Cloudflare経路） | Neon PostgreSQL（ap-southeast-1） | Local PostgreSQLへ到達できないWorker用。接続情報はCloudflare Secretで管理 |
+| DB（Cloudflare経路） | なし（Neon は2026-09に利用停止） | 正本は本機LANのLocal PostgreSQL。Cloudflare API WorkerのDB接続経路（LAN Tunnel経由等）は要承認。停止中のため `/api/health/ready` は503を返す |
 
 未認証アクセスは Cloudflare Access のログインへリダイレクトされます。
 API Worker 直URL・LAN API への未認証アクセスは **401** を返します（`ALLOW_ANONYMOUS_VIEWER=false` が既定）。

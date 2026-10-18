@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ErrorMessage, LoadingState } from "@/components/Status";
 import { api } from "@/lib/api";
-import { loadPrefs, formatDateTime } from "@/lib/utils";
+import { loadPrefs, formatDateTime, downloadFile } from "@/lib/utils";
 import type { OperationAuditLog } from "@/types/api";
 
 export default function AuditPage() {
@@ -11,6 +11,8 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adminKey, setAdminKey] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -25,6 +27,21 @@ export default function AuditPage() {
     }
   }, []);
 
+  const exportCsv = useCallback(async () => {
+    if (!adminKey) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(new Date());
+      const filename = `cci-audit-operations-${today}.csv`;
+      await downloadFile(api.operationAuditExportUrl({ limit: 5000 }), filename, "操作監査ログCSV");
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "CSVエクスポートに失敗しました");
+    } finally {
+      setExporting(false);
+    }
+  }, [adminKey]);
+
   useEffect(() => {
     setAdminKey(loadPrefs().adminKey ?? "");
   }, []);
@@ -33,11 +50,27 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">操作監査ログ</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold">操作監査ログ</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void exportCsv()}
+            disabled={!adminKey || exporting}
+            aria-busy={exporting}
+            className={`rounded px-3 py-2 text-sm font-medium ${adminKey && !exporting ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-slate-200 text-slate-400"}`}
+          >
+            {exporting ? "出力中…" : "CSVエクスポート"}
+          </button>
+          {!adminKey && <span className="text-xs text-amber-600">設定画面でAdmin Keyを保存してください</span>}
+        </div>
+      </div>
       <p className="text-sm text-gray-600">
         単価版の作成・承認・失効、定期取込、案件の作成・編集、ユーザー管理などの個人単位の操作履歴です（閲覧は監査者・システム管理者）。
       </p>
+      <p className="text-xs text-gray-500">CSVエクスポートの実行自体も操作監査ログに記録されます。</p>
       {error && <ErrorMessage message={error} onRetry={() => void load()} />}
+      {exportError && <ErrorMessage message={exportError} onRetry={() => void exportCsv()} />}
       {loading && <LoadingState />}
       {!loading && (
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

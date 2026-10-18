@@ -1,5 +1,18 @@
 # リリースノート
 
+## Unreleased（2026-10-18: 監査ログCSVエクスポートとCSP是正）
+
+- 操作監査ログのCSVエクスポートを実装（`GET /api/audit/operations/export`・`auditor` / `system_admin`）
+  - 期間（`from` 含む / `to` 排他）・操作者・操作種別・上限（1〜5000）で絞り込み。日付のみはJST 00:00として解釈
+  - UTF-8 BOM・CRLF、日時はJST、末尾に監査IDを出力し台帳と突合可能。IPアドレス列は現行未記録のため非出力
+  - `Cache-Control: no-store`・`X-Export-Truncated` 等のメタヘッダを付与
+  - エクスポート実行自体を操作監査ログ（`action=audit.export`）に記録
+  - 数式インジェクション対策（文字列セル先頭の `=`/`+`/`-`/`@` 等を無害化、負数は除外）
+  - `/admin/audit/` にCSVエクスポートボタンを追加
+- CSP: Cloudflare Web Analytics ビーコン（`https://static.cloudflareinsights.com`）を `script-src` に追加許可。
+  アプリページの `unsafe-eval` 不許可・`frame-ancestors 'none'` は維持
+- テスト: API 214件 PASS（新規21件＋統合2件）／Web 8件 PASS（CSP回帰4件含む）
+
 ## Unreleased（2026-08-31: Local PostgreSQL運用の再現性）
 
 - 同一品目・地域の実単価と動向評価値が混在しないよう、データソース・単位・分類ごとに時系列、各種Export、アラート、品質診断、予測、KPIを分離
@@ -29,7 +42,7 @@
   - APIキー入力欄／設定テスト／設定保存／リセット
   - 設定テストは `POST /api/ai/test-key`（サーバー設定キーとの一致＋DeepSeek API疎通確認）
 - AI利用監査ログは、管理者キーがなくても**サーバーに設定されたDeepSeek APIキー（X-AI-Key）が有効なら閲覧可能**に変更
-- 監査ログのデータエクスポートは後日相談（未実装のまま）
+- 監査ログのデータエクスポートは当時未実装（2026-10-18 に実装済み。先頭の Unreleased を参照）
 - テスト138件 PASS / Workerビルド成功
 
 ## Unreleased（2026-08-05: ルーティング・承認通知・照合検証・利用者別KPI）

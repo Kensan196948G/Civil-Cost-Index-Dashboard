@@ -11,7 +11,8 @@
   - `/admin/audit/` にCSVエクスポートボタンを追加
 - CSP: Cloudflare Web Analytics ビーコン（`https://static.cloudflareinsights.com`）を `script-src` に追加許可。
   アプリページの `unsafe-eval` 不許可・`frame-ancestors 'none'` は維持
-- テスト: API 214件 PASS（新規21件＋統合2件）／Web 8件 PASS（CSP回帰4件含む）
+- Web依存の新規公表脆弱性（`sharp` <0.35.5 / `source-map-js` <=1.2.1, high）をoverridesで解消し、npm/pnpm両lockfileを更新
+- テスト: API 220件 PASS（新規26件＋統合4件）／Web 8件 PASS（CSP回帰4件含む）
 
 ## Unreleased（2026-08-31: Local PostgreSQL運用の再現性）
 

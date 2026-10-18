@@ -25,20 +25,65 @@
 **原因**: staging API Worker には到達可能なDB経路が無い（Neonは2026-09に利用停止済み。§1の「DB接続は現在停止中」と同じ既知状態）。
 アプリケーションコードの不具合ではない。staging Web のCSP違反はコード側で修正済み（`apps/web/public/_headers`）。
 
-**Repository側で完了した対応**:
+**Repository側で完了した対応**（PR #85 / main `20e2a9a`）:
 - CSPに `https://static.cloudflareinsights.com` を追加（回帰テスト `apps/web/tests/headers.test.ts`）
 - 監査ログCSVエクスポートを実装（本障害とは独立。`docs/api-contract.md` 参照）
+- ローカル実効確認（2026-10-18）: `wrangler dev` でビルド済み `out/` を配信し、`/` と `/admin/audit/` の
+  `Content-Security-Policy` に beacon 許可が入ることを確認（**stagingへは未deploy**）
 
 **未解消（Human Gate／意思決定が必要）**: stagingを実際に復旧するには、いずれかを選択して承認が必要。
 
 | 案 | 内容 | 影響・リスク | 必要な承認 |
 | --- | --- | --- | --- |
-| A | staging Web の `NEXT_PUBLIC_API_BASE_URL` を LAN API の Tunnel（`https://cci-api-mvp.mirai-dx-platform.com`）へ変更し再ビルド/デプロイ | staging が `cci_mvp` のデータを共有（環境分離なし）。CORS設定の追加が必要な可能性 | Web deploy、設定変更 |
-| B | 公開DBを再用意し staging Worker の `DATABASE_URL` secret を更新 | 外部サービス費用・データ分離は確保。secret変更 | secret変更、外部契約 |
+| A | staging Web の `NEXT_PUBLIC_API_BASE_URL` を LAN API の Tunnel（`https://cci-api-mvp.mirai-dx-platform.com`）へ変更し再ビルド/デプロイ | staging が `cci_mvp` のデータを共有（環境分離なし）。**実測: 同APIのデータAPIは未認証401、staging originへのCORSヘッダも未設定**のため、Web差し替えだけでは動作せず認証方式・CORSの設計が必要 | Web deploy、ホスト設定（CORS/認証） |
+| B | 公開DBを再用意し staging Worker の `DATABASE_URL` secret を更新 | 外部サービス費用・データ分離は確保。secret変更。staging用のwrangler設定が未整備 | secret変更、外部契約 |
 | C | staging を LAN API + 専用Tunnel + systemd 構成へ移行（本番LAN運用と同型） | 環境分離・再現性が最良。Tunnel/DNS/unit追加 | DNS、deploy、インフラ変更 |
 | D | staging を廃止し MVP（LAN）のみ維持 | 最小運用。staging受入の場が無くなる | 運用方針決定 |
 
 現時点では **A〜Dいずれも未実施**（deploy・secret・DNSは本セッションの許可範囲外）。復旧手順は承認後に実施する。
+
+### 1.2 復旧手順（承認後・2026-10-18時点では未実行）
+
+> 以下は承認後に実行する手順案であり、**本セッションでは未実行**（deploy/secret/DNSは禁止操作）。
+> 実施前に `git status` と `gh pr list` で未統合変更が無いことを確認し、作業前後の状態を記録する。
+
+#### A. staging Web を LAN API（Tunnel）へ向ける（最短・データ共有を許容する場合）
+
+前提（2026-10-18 実測）:
+- `https://cci-api-mvp.mirai-dx-platform.com/api/health/ready` = 200（DB正常）
+- 同APIのデータAPIは未認証で **401**（`認証が必要です（Admin KeyまたはCloudflare Access）`）
+- staging origin からの `OPTIONS` は 204 だが **`Access-Control-Allow-Origin` が返らない**（`CORS_ORIGINS` 未設定）
+
+手順:
+1. LAN API の `CORS_ORIGINS` に `https://ccid-mvp-staging.mirai-dx-platform.com` を追加し、認証方式（Cloudflare Access JWT / Admin Key 等）を決定して反映（ホスト設定・要sudo）。
+2. `cd apps/web && NEXT_STATIC_EXPORT=1 NEXT_PUBLIC_API_BASE_URL=https://cci-api-mvp.mirai-dx-platform.com npm run build`
+3. `cd apps/web && npx wrangler deploy --name cci-web-mvp-staging`
+4. 「共通検証」を実施。
+- ロールバック: `npx wrangler rollback --name cci-web-mvp-staging` で直前versionへ戻す。
+
+#### C. staging 専用の LAN API + Tunnel（推奨・恒久）
+
+1. `cci_staging` DB と staging 専用 `.env`（本番/MVPと分離）を用意
+2. `cci-api-staging.service`（例 :18806）+ `cci-api-staging-cloudflared.service` を追加
+3. `ccid-api-staging.mirai-dx-platform.com` をTunnelへルーティング（DNSはcustom domainで自動作成）
+4. Webを `NEXT_PUBLIC_API_BASE_URL=https://ccid-api-staging.mirai-dx-platform.com` でビルドし `cci-web-mvp-staging` へdeploy
+5. 「共通検証」を実施
+- unit名・ポート・ホスト名は承認時に確定する（既存 `cci-api-mvp.service` と同型）。
+
+#### 共通検証（復旧判定）
+
+| # | コマンド | 期待 |
+| --- | --- | --- |
+| 1 | `curl -sS -o /dev/null -w '%{http_code}\n' https://ccid-mvp-staging.mirai-dx-platform.com/` | 200 |
+| 2 | `curl -sS -w '\n%{http_code}\n' <採用API>/api/health/ready` | 200・`database ok` |
+| 3 | `curl -sS -o /dev/null -w '%{http_code}\n' <採用API>/api/regions` | 200（採用した認証方式で） |
+| 4 | `curl -sS -D- https://ccid-mvp-staging.mirai-dx-platform.com/ \| grep -i content-security-policy \| grep -c static.cloudflareinsights.com` | 1 |
+| 5 | ブラウザで `/`・`/admin/audit/` を開く | 画面エラーなし・CSP違反0・主要データ表示 |
+| 6 | `curl -sS -D- -H "X-Admin-Key: <key>" <採用API>/api/audit/operations/export?limit=1` | 200・`text/csv`・BOM |
+| 7 | `gh run list --branch main --workflow CI --limit 1` | success（コード変更を伴う場合） |
+
+失敗時は deploy をロールバックし、DB・secret・DNSは変更前の値へ戻す（データ削除は行わない）。
+
 
 ## 2. ヘルスチェック
 

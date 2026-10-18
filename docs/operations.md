@@ -101,6 +101,12 @@ Option C を採用し、staging 専用のローカルDB・API・Tunnel を構築
 | CORS | `https://ccid-mvp-staging.mirai-dx-platform.com` と `https://cci-web-mvp-staging.kensan1969.workers.dev` を許可 | OPTIONS 204 + `access-control-allow-origin` 一致 |
 | Web | 新API向けに `apps/web/out` をビルド済み（CSP beacon許可11箇所・新API URL・監査CSV UIをchunkで確認） | **deploy は未実施**（DEPLOYポリシーゲート） |
 
+再現用ファイル（`infra/staging/`）:
+- `docker-compose.yml`: 稼働中コンテナと同じ構成（`cci-staging-api` / `cci-staging-cloudflared`）。環境変数でパスを上書き可能。
+- `staging.env.example`: 秘密値を含まない環境変数雛形（`ADMIN_API_KEY` は人間が追記）。
+- `verify-staging.sh`: 読み取りのみの疎通確認（API ready/regions/items・Web/CSP・任意で監査CSV）。
+- 詳細手順: `infra/staging/README.md`。
+
 運用コマンド:
 
 ```bash

@@ -36,7 +36,7 @@ staging 専用の **LAN API + Cloudflare Tunnel + ローカル PostgreSQL** 構�
 4. 起動:
    ```bash
    docker compose -f infra/staging/docker-compose.yml up -d
-   bash infra/staging/verify-staging.sh   # Web反映前は CSP 検査のみ失敗する
+   bash infra/staging/verify-staging.sh   # Web反映前は CSP と API接続先の検査が失敗する
    ```
 
 ## Web の反映（人間が実行）
@@ -73,4 +73,7 @@ bash infra/staging/verify-staging.sh
 1. `/api/health/ready` が `status: ok`
 2. `/api/regions` / `/api/items` が 200
 3. Web が 200 かつ CSP に `static.cloudflareinsights.com` を含む
-4. （任意）`CCI_STAGING_ADMIN_KEY` 設定時、監査CSVエクスポートが 200
+4. Web のビルドが新しいAPIホスト（`ccid-api-staging...`）を参照している
+5. （任意）`CCI_STAGING_ADMIN_KEY` 設定時、監査CSVエクスポートが 200
+
+すべての検査を実行し、失敗があれば exit 1 を返します。

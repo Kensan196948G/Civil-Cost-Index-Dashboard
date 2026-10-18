@@ -1,0 +1,39 @@
+# CCI staging stack (Option C: 専用LAN API + 専用Tunnel + ローカルPostgreSQL)
+#
+# 使い方:
+#   1. cp infra/staging/staging.env.example ~/.config/cci/staging.env
+#      chmod 600 ~/.config/cci/staging.env   # ADMIN_API_KEY を使う場合は値を記入
+#   2. docker compose -f infra/staging/docker-compose.yml up -d
+#   3. bash infra/staging/verify-staging.sh
+#
+# 環境変数で上書き可能:
+#   CCI_STAGING_ENV_FILE / CCI_STAGING_API_DIR
+#   CCI_STAGING_TUNNEL_CONFIG / CCI_STAGING_TUNNEL_CREDENTIALS
+
+services:
+  api:
+    image: node:22
+    container_name: cci-staging-api
+    command: ["node", "dist-node/server.mjs"]
+    working_dir: /app
+    user: "1000:1000"
+    env_file:
+      - ${CCI_STAGING_ENV_FILE:-/home/kensan/.config/cci/staging.env}
+    volumes:
+      - ${CCI_STAGING_API_DIR:-/home/kensan/Projects/Mirai-Admin-Platform/Civil-Cost-Index-Dashboard/apps/api}:/app:ro
+      # ローカルPostgreSQLへはUnix socket + peer認証で接続する（パスワード不要）
+      - /var/run/postgresql:/var/run/postgresql
+    ports:
+      - "127.0.0.1:18806:8000"
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cci-staging-cloudflared
+    command: ["tunnel", "--config", "/etc/cloudflared/config.yml", "run"]
+    network_mode: host
+    user: "1000:1000"
+    volumes:
+      - ${CCI_STAGING_TUNNEL_CONFIG:-/home/kensan/.cloudflared/cci-staging-docker-config.yml}:/etc/cloudflared/config.yml:ro
+      - ${CCI_STAGING_TUNNEL_CREDENTIALS:-/home/kensan/.cloudflared/fabd214e-180b-4e54-8d67-9923e81df87a.json}:/etc/cloudflared/creds.json:ro
+    restart: unless-stopped

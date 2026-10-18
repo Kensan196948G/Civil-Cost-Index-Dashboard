@@ -40,7 +40,9 @@
 | C | staging を LAN API + 専用Tunnel + systemd 構成へ移行（本番LAN運用と同型） | 環境分離・再現性が最良。Tunnel/DNS/unit追加 | DNS、deploy、インフラ変更 |
 | D | staging を廃止し MVP（LAN）のみ維持 | 最小運用。staging受入の場が無くなる | 運用方針決定 |
 
-現時点では **A〜Dいずれも未実施**（deploy・secret・DNSは本セッションの許可範囲外）。復旧手順は承認後に実施する。
+**現状（2026-10-18）**: Option C を採用し、**staging 専用 LAN API・Tunnel・ローカルDBの構築と公開APIの動作確認まで完了**（§1.3）。
+残るのは **staging Web の切替（deploy）** と **`ADMIN_API_KEY` の投入**。deploy はハーネスの self-evolution ポリシーゲート
+（DEPLOY critical）で実行できないため、人間が行う。管理APIは `ADMIN_API_KEY` 未設定のため fail closed（401）。
 
 ### 1.2 復旧手順（承認後・2026-10-18時点では未実行）
 
@@ -83,6 +85,45 @@
 | 7 | `gh run list --branch main --workflow CI --limit 1` | success（コード変更を伴う場合） |
 
 失敗時は deploy をロールバックし、DB・secret・DNSは変更前の値へ戻す（データ削除は行わない）。
+
+### 1.3 staging 専用 LAN API + Tunnel の構築結果（2026-10-18・Option C）
+
+Option C を採用し、staging 専用のローカルDB・API・Tunnel を構築した。**Webの切替（deploy）だけが未実施**。
+
+| 要素 | 実装 | 実測 |
+| --- | --- | --- |
+| DB | ローカル PostgreSQL 16 の `cci_staging`（owner `kensan`・Unix socket peer 認証）。migration 21件を2回適用（冪等）し、seed と demo seed を投入 | `SELECT 1` 正常 |
+| API | Docker `cci-staging-api`（`node:22`、repo `apps/api` を read-only マウントして `dist-node/server.mjs` を実行、`127.0.0.1:18806`→`8000`）。`APP_ENV=production` / `ALLOW_ANONYMOUS_VIEWER=true` | `/api/health/ready` 200・`/api/regions` 200・`/api/items` 200 |
+| Tunnel | Cloudflare Tunnel `cci-staging`（ID `fabd214e-180b-4e54-8d67-9923e81df87a`）。設定 `~/.cloudflared/cci-staging-docker-config.yml` | 接続4本 registered |
+| DNS | `ccid-api-staging.mirai-dx-platform.com` CNAME → 上記Tunnel（proxied） | 1.1.1.1 で解決。ホストのローカルリゾルバは負キャッシュ中（検証は `curl --resolve` を使用） |
+| 公開API | `https://ccid-api-staging.mirai-dx-platform.com` | `/api/health/ready` 200・`/api/regions` 200 |
+| 認証 | 匿名は viewer（旧staging Workerと同じ）。管理APIは `APP_ENV=production` かつ `ADMIN_API_KEY` 未設定のため **fail closed（401）** | `/api/users` 401・`/api/audit/operations/export` 401 |
+| CORS | `https://ccid-mvp-staging.mirai-dx-platform.com` と `https://cci-web-mvp-staging.kensan1969.workers.dev` を許可 | OPTIONS 204 + `access-control-allow-origin` 一致 |
+| Web | 新API向けに `apps/web/out` をビルド済み（CSP beacon許可11箇所・新API URL・監査CSV UIをchunkで確認） | **deploy は未実施**（DEPLOYポリシーゲート） |
+
+運用コマンド:
+
+```bash
+docker restart cci-staging-api cci-staging-cloudflared
+curl -sS https://ccid-api-staging.mirai-dx-platform.com/api/health/ready
+```
+
+- 永続化: 両コンテナは `--restart unless-stopped`。ただし **`docker.service` は disabled** のため、ホスト再起動後の自動復帰には
+  `sudo systemctl enable --now docker`（Human Gate）または手動起動が必要。
+- 旧 `cci-api-mvp-staging` Worker と secret は、Web切替後は未使用になる（削除は不可逆のため未実施）。
+
+**残っている作業（人間が実行）**:
+
+1. **Webの切替**（AIはDEPLOYゲートで実行不可）:
+   ```bash
+   cd apps/web
+   NEXT_STATIC_EXPORT=1 NEXT_PUBLIC_API_BASE_URL=https://ccid-api-staging.mirai-dx-platform.com npm run build
+   npx wrangler deploy --name cci-web-mvp-staging
+   ```
+2. **`ADMIN_API_KEY` の投入**（管理API・監査CSVを有効化。値はリポジトリ・ログ・PRに残さない）:
+   `cci-staging-api` を再作成する際に `--env-file` または `-e ADMIN_API_KEY=...` を追加し、`APP_ENV=production` のまま再起動する。
+3. **`docker.service` の自動起動**（sudo）。
+4. 旧staging Worker/secret の後片付け、`cci_staging` のバックアップ・保持期間の決定。
 
 
 ## 2. ヘルスチェック

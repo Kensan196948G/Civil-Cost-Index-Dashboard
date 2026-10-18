@@ -8,6 +8,38 @@
 - Cloudflare API WorkerのDB接続経路（Cloudflare Tunnel経由でLAN APIへ到達する等）は設計判断のため要承認。
 - 監視: Local `/api/health/ready`、Docker health、Cloudflare Workers Observability
 
+### 1.1 2026-10-18 staging 障害の実測（未解消・要判断）
+
+対象: `https://ccid-mvp-staging.mirai-dx-platform.com/` と `https://cci-api-mvp-staging.kensan1969.workers.dev`
+
+| 項目 | 実測結果 |
+| --- | --- |
+| staging Web | HTTP 200（HTMLは配信）。画面はAPIエラー「内部エラーが発生しました。」を表示 |
+| staging API `/api/health/live` | 200（`version=0.1.0-mvp-staging`） |
+| staging API `/api/health/ready` | **503**（`データベース接続に失敗しました。`） |
+| staging API `/api/regions`・`/api/items` | **500** `INTERNAL_ERROR` |
+| staging API Worker | `cci-api-mvp-staging`。最終deploy 2026-08-13（main `9f6339a`）。`DATABASE_URL` secret は存在するが接続不能 |
+| LAN 正本 API（`cci-api-mvp` :18805 / DB `cci_mvp`） | `/api/health/ready` 200、DB正常 |
+| staging Web CSP | `script-src` が `static.cloudflareinsights.com` を許可せず、Cloudflareが自動注入するbeaconを遮断（コンソール違反） |
+
+**原因**: staging API Worker には到達可能なDB経路が無い（Neonは2026-09に利用停止済み。§1の「DB接続は現在停止中」と同じ既知状態）。
+アプリケーションコードの不具合ではない。staging Web のCSP違反はコード側で修正済み（`apps/web/public/_headers`）。
+
+**Repository側で完了した対応**:
+- CSPに `https://static.cloudflareinsights.com` を追加（回帰テスト `apps/web/tests/headers.test.ts`）
+- 監査ログCSVエクスポートを実装（本障害とは独立。`docs/api-contract.md` 参照）
+
+**未解消（Human Gate／意思決定が必要）**: stagingを実際に復旧するには、いずれかを選択して承認が必要。
+
+| 案 | 内容 | 影響・リスク | 必要な承認 |
+| --- | --- | --- | --- |
+| A | staging Web の `NEXT_PUBLIC_API_BASE_URL` を LAN API の Tunnel（`https://cci-api-mvp.mirai-dx-platform.com`）へ変更し再ビルド/デプロイ | staging が `cci_mvp` のデータを共有（環境分離なし）。CORS設定の追加が必要な可能性 | Web deploy、設定変更 |
+| B | 公開DBを再用意し staging Worker の `DATABASE_URL` secret を更新 | 外部サービス費用・データ分離は確保。secret変更 | secret変更、外部契約 |
+| C | staging を LAN API + 専用Tunnel + systemd 構成へ移行（本番LAN運用と同型） | 環境分離・再現性が最良。Tunnel/DNS/unit追加 | DNS、deploy、インフラ変更 |
+| D | staging を廃止し MVP（LAN）のみ維持 | 最小運用。staging受入の場が無くなる | 運用方針決定 |
+
+現時点では **A〜Dいずれも未実施**（deploy・secret・DNSは本セッションの許可範囲外）。復旧手順は承認後に実施する。
+
 ## 2. ヘルスチェック
 
 ```bash

@@ -41,7 +41,13 @@ import { runQualityChecks } from "./services/aiQuality";
 import { AI_TEMPLATES } from "./services/aiTemplates";
 import { listAiAudit, submitAiFeedback } from "./services/aiAudit";
 import { listUsers, createUser, updateUser, deleteUser } from "./services/users";
-import { listOperationAudit } from "./services/opsAudit";
+import {
+  AUDIT_EXPORT_MAX_ROWS,
+  buildOperationAuditCsv,
+  listOperationAudit,
+  listOperationAuditForExport,
+  parseAuditExportQuery,
+} from "./services/opsAudit";
 import {
   listPriceVersions,
   createPriceVersion,
@@ -786,6 +792,50 @@ app.get("/api/audit/operations", async (c) => {
       limit: Math.floor(limit),
     }),
   });
+});
+
+// 操作監査ログの CSV エクスポート。
+// 注意: `/api/audit/operations/:id` のような動的ルートを追加する場合は、この静的ルートより後に定義すること。
+app.get("/api/audit/operations/export", async (c) => {
+  const sql = getSql(c.env);
+  const identity = await requireRole(c, sql, ["auditor", "system_admin"]);
+  const parsed = parseAuditExportQuery({
+    actor: c.req.query("actor") ?? undefined,
+    action: c.req.query("action") ?? undefined,
+    from: c.req.query("from") ?? undefined,
+    to: c.req.query("to") ?? undefined,
+    limit: c.req.query("limit") ?? undefined,
+  });
+  if (!parsed.ok) return fail(c, "VALIDATION_ERROR", parsed.message, 400);
+  const { filters } = parsed;
+  const limit = filters.limit ?? AUDIT_EXPORT_MAX_ROWS;
+  try {
+    const rows = await listOperationAuditForExport(sql, filters);
+    // エクスポート実行自体を監査ログに記録する（監査証跡の説明責任）。
+    await recordAudit(sql, identity, "audit.export", "operation_audit_log", undefined, {
+      actor: filters.actor ?? null,
+      action: filters.action ?? null,
+      from: filters.from ?? null,
+      to: filters.to ?? null,
+      limit,
+      row_count: rows.length,
+      request_id: c.get("requestId"),
+    });
+    const filenameDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(new Date());
+    return c.body(buildOperationAuditCsv(rows), 200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="cci-audit-operations-${filenameDate}.csv"`,
+      // 個人情報（メールアドレス・操作詳細）を含むため共有キャッシュへ残さない。
+      "Cache-Control": "no-store",
+      Vary: "Origin, X-Admin-Key",
+      // 抜粋であること（上限到達）を呼び出し側で判別できるようにする。
+      "X-Export-Row-Count": String(rows.length),
+      "X-Export-Limit": String(limit),
+      "X-Export-Truncated": rows.length >= limit ? "true" : "false",
+    });
+  } catch (e) {
+    return handleError(c, e);
+  }
 });
 
 // ---- 単価版管理・スナップショット ----

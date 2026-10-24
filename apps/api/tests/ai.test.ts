@@ -119,6 +119,8 @@ describe("generateAiText (OpenAI互換プロバイダー)", () => {
       const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
       expect(body.model).toBe("deepseek-chat");
       expect(body.messages[0].content).toBe("system");
+      const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+      expect(headers["X-Pplx-Integration"]).toBeUndefined();
     } finally {
       vi.unstubAllGlobals();
     }
@@ -145,6 +147,8 @@ describe("generateAiText (OpenAI互換プロバイダー)", () => {
       expect(res?.text).toBe("回答");
       const url = fetchMock.mock.calls[0][0] as string;
       expect(url).toContain("api.perplexity.ai/chat/completions");
+      const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+      expect(headers["X-Pplx-Integration"]).toBe("civil-cost-index-dashboard");
     } finally {
       vi.unstubAllGlobals();
     }

@@ -197,6 +197,7 @@ async function callOpenAiCompatible(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      ...(provider === "perplexity" ? { "X-Pplx-Integration": "civil-cost-index-dashboard" } : {}),
     },
     body: JSON.stringify({
       model,

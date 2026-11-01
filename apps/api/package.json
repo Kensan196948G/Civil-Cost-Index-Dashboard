@@ -31,7 +31,7 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.13.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "zod": "^3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260730.1",

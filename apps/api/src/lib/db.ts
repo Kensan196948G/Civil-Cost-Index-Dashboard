@@ -17,12 +17,22 @@ type PgPoolLike = {
 
 const pgPools = new Map<string, Promise<PgPoolLike>>();
 
-function isLocalPgUrl(value: string): boolean {
+/**
+ * ローカル PostgreSQL（TCP または Unix socket）かを判定する。
+ * Unix socket 形式 `postgresql://user@/db?host=/var/run/postgresql` は
+ * `new URL()` が空ホストのため例外になるので、判定用に `localhost` を補って解析する
+ * （接続文字列そのものは変更しない）。
+ */
+export function isLocalPgUrl(value: string): boolean {
   try {
-    const url = new URL(value);
+    const normalized = value.replace(/^(postgres(?:ql)?:\/\/)([^/?#]*@)?\//, "$1$2localhost/");
+    const url = new URL(normalized);
+    const socketHost = url.searchParams.get("host") ?? "";
+    const hostname = url.hostname.replace(/^\[|\]$/g, "");
     return (
+      socketHost.startsWith("/") ||
       url.searchParams.get("sslmode") === "disable" ||
-      ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(url.hostname)
+      ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(hostname)
     );
   } catch {
     return false;

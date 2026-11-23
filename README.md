@@ -74,7 +74,7 @@ flowchart TB
 | ✓ 承認待ちデータ | 定期取得データの承認・却下 | `/admin/staged/` |
 | ¥ 単価版管理 | 適用開始日・税込/税抜・旧版比較・承認・スナップショット | `/admin/price-versions/` |
 | ☺ ユーザー管理 | RBAC（7役割）とCloudflare Accessメール連携 | `/admin/users/` |
-| ✎ 操作監査 | 個人単位の操作監査ログ | `/admin/audit/` |
+| ✎ 操作監査 | 個人単位の操作監査ログ・CSVエクスポート | `/admin/audit/` |
 | ◈ AI管理 | データ品質チェック・AI利用監査ログ・DeepSeek APIキー設定 | `/admin/ai/` |
 | ✦ AI市況ナビ | AI市況サマリー・アラート説明・レポート生成・分析テンプレート | `/ai/` |
 | 📊 経営ダッシュボード | 案件別粗利・港湾稼働率・採用単価の実績対比 | `/admin/management/` |
@@ -213,7 +213,7 @@ flowchart TB
 | データ承認者（data_approver） | 承認待ちデータ・単価版の承認 |
 | 積算担当（estimator） | 案件・数量・積算・見積比較の入力 |
 | 積算責任者（estimating_manager） | 採用単価の決定・積算書の承認 |
-| 監査者（auditor） | 操作監査ログ・AI利用監査ログの閲覧 |
+| 監査者（auditor） | 操作監査ログ・AI利用監査ログの閲覧とCSVエクスポート |
 | システム管理者（system_admin） | ユーザー管理・全操作 |
 
 ### X-Admin-Key とは
@@ -361,7 +361,17 @@ AI利用監査ログ（`/api/ai/audit`）は、以下のどちらかで閲覧で
 
 AI管理画面（`/admin/ai/`）の「DeepSeek APIキー設定」で、
 キー入力 → **設定テスト** → **設定保存** → **リセット** ができます。
-監査ログのデータエクスポートは未実装です（後日相談予定）。
+操作監査ログ（`/admin/audit/`）のデータエクスポートに対応しています。「CSVエクスポート」ボタン、
+または `GET /api/audit/operations/export`（`auditor` / `system_admin`）で取得できます。
+
+- 上限: 5000行（`limit` で 1〜5000 を指定）。`X-Export-Truncated: true` は上限到達（他に該当行がある可能性）を示します。
+- 期間: `from`（含む）/ `to`（含まない）を ISO 8601 で指定。日付のみは画面表示と同じ JST 00:00 として解釈し、
+  日時を指定する場合はタイムゾーンオフセット（`Z` / `+09:00`）が必須です。
+- 形式: UTF-8 BOM付きCSV（CRLF）。日時はJST表記で、末尾の監査IDにより台帳と突合できます。
+- エクスポート実行自体も操作監査ログ（`action=audit.export`）に記録されます。
+- 数式インジェクション対策として、`=`・`+`・`-`・`@` 等で始まる**文字列**セルは先頭に `'` を付与します
+  （`-0.1` のような数値表現は対象外）。Excelで開くとセル値に `'` が残る場合があります。
+- 現行の監査ログは送信元IPを記録していないため、IPアドレス列は含みません。
 
 ### セキュリティ上の注意
 
@@ -617,11 +627,15 @@ sudo systemctl restart cci
 
 - 管理APIは `X-Admin-Key`（`ADMIN_API_KEY`）に加え、RBAC（7役割）と Cloudflare Access JWT で保護
 - 変更操作（単価版・定期取込・案件・ユーザー管理）は個人単位の操作監査ログに記録
+- 監査ログのCSVエクスポートは `auditor` / `system_admin` に限定し、`Cache-Control: no-store` で配信。エクスポート操作自体も監査記録
+- 監査CSVは数式インジェクション対策済み（セル先頭の `=`,`+`,`-`,`@` 等を無害化）
 - AI利用監査ログは `X-Admin-Key` またはサーバー設定済み DeepSeek API キー（`X-AI-Key`）で閲覧
 - 定期取得データは承認後に本番反映（データ承認者／積算責任者）
 - アップロードは拡張子・サイズ・SHA-256重複を検証
 - CSVパース・SQLはパラメータ化（インジェクション対策）
 - 静的サイトにセキュリティヘッダー適用（CSP / X-Frame-Options / nosniff 等）
+  - CSP は Cloudflare が HTML に自動注入する Web Analytics ビーコン（`https://static.cloudflareinsights.com`）のみ追加許可し、
+    アプリページでは `unsafe-eval` を許可しない
 - 秘密情報（DB接続文字列・APIキー）はリポジトリにコミットしない
 - 本番DBへの破壊的マイグレーション・データ削除は承認なしに実行しない
 

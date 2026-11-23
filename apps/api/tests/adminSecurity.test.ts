@@ -1,10 +1,47 @@
 import { describe, expect, it } from "vitest";
 import { requireAdmin, timingSafeEqualStrings, type AppContext } from "../src/lib/http";
-import { resolveIdentity, type AuthContext } from "../src/lib/auth";
+import { resolveIdentity, ALL_ROLES, type AuthContext } from "../src/lib/auth";
+import { recordAudit } from "../src/lib/audit";
 import type { Env } from "../src/types";
 import type { Sql } from "../src/lib/db";
 
 const sqlUnused: Sql = async () => [];
+
+function makeCapturingSql(): { sql: Sql; values: unknown[][] } {
+  const values: unknown[][] = [];
+  const fn = ((strings: TemplateStringsArray, ...vals: unknown[]) => {
+    values.push(vals);
+    return Promise.resolve([] as Array<Record<string, unknown>>);
+  }) as unknown as Sql;
+  return { sql: fn, values };
+}
+
+describe("recordAudit representative role", () => {
+  it("records system_admin as the representative role for admin-key identities", async () => {
+    const { sql, values } = makeCapturingSql();
+    await recordAudit(
+      sql,
+      { email: "admin-key", display_name: null, roles: [...ALL_ROLES], source: "admin-key" },
+      "user.create",
+      "user",
+      "u1",
+      { email: "x@x.jp" }
+    );
+    expect(values[0]?.[1]).toBe("system_admin");
+  });
+
+  it("records the first role for limited-role identities", async () => {
+    const { sql, values } = makeCapturingSql();
+    await recordAudit(sql, { email: "taro@example.com", display_name: null, roles: ["estimator", "viewer"], source: "access-jwt" }, "estimate.calculate");
+    expect(values[0]?.[1]).toBe("estimator");
+  });
+
+  it("falls back to viewer for empty roles", async () => {
+    const { sql, values } = makeCapturingSql();
+    await recordAudit(sql, { email: "anonymous", display_name: null, roles: [], source: "anonymous" }, "read.view");
+    expect(values[0]?.[1]).toBe("viewer");
+  });
+});
 
 function makeCtx(envOverrides: Partial<Env> = {}, headers: Record<string, string> = {}): AppContext {
   return {
@@ -81,10 +118,10 @@ describe("resolveIdentity admin key (timing-safe path)", () => {
     APP_ENV: "production",
   };
 
-  function authCtx(headers: Record<string, string>): AuthContext {
+  function authCtx(headers: Record<string, string>, envOverrides: Partial<Env> = {}): AuthContext {
     return {
       req: { header: (name: string) => headers[name] },
-      env,
+      env: { ...env, ...envOverrides },
     } as unknown as AuthContext;
   }
 
@@ -98,5 +135,39 @@ describe("resolveIdentity admin key (timing-safe path)", () => {
     const id = await resolveIdentity(authCtx({ "X-Admin-Key": "wrong-key" }), sqlUnused);
     expect(id.source).toBe("anonymous");
     expect(id.roles).toEqual([]);
+  });
+
+  it("admin key takes precedence over the Basic gate (LAN management UI usable)", async () => {
+    // Basic認証環境でも X-Admin-Key が一致するリクエストは管理者として扱う（README仕様）
+    const id = await resolveIdentity(
+      authCtx(
+        { "X-Admin-Key": "secret-key", Authorization: `Basic ${btoa("cci:pass")}` },
+        { BASIC_AUTH_USERNAME: "cci", BASIC_AUTH_PASSWORD: "pass" }
+      ),
+      sqlUnused
+    );
+    expect(id.source).toBe("admin-key");
+    expect(id.roles).toContain("system_admin");
+  });
+
+  it("Basic-only requests still resolve as viewer when admin key is missing", async () => {
+    const id = await resolveIdentity(
+      authCtx({ Authorization: `Basic ${btoa("cci:pass")}` }, { BASIC_AUTH_USERNAME: "cci", BASIC_AUTH_PASSWORD: "pass" }),
+      sqlUnused
+    );
+    expect(id.source).toBe("basic-auth");
+    expect(id.roles).toEqual(["viewer"]);
+  });
+
+  it("wrong admin key with Basic credentials falls back to Basic viewer (not anonymous)", async () => {
+    const id = await resolveIdentity(
+      authCtx(
+        { "X-Admin-Key": "wrong-key", Authorization: `Basic ${btoa("cci:pass")}` },
+        { BASIC_AUTH_USERNAME: "cci", BASIC_AUTH_PASSWORD: "pass" }
+      ),
+      sqlUnused
+    );
+    expect(id.source).toBe("basic-auth");
+    expect(id.roles).toEqual(["viewer"]);
   });
 });

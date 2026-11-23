@@ -151,6 +151,8 @@ export const api = {
     request<{ deleted: boolean }>(`/api/users/${id}`, { method: "DELETE", headers: { "X-Admin-Key": adminKeyHeader() } }),
   operationAudit: (params?: { actor?: string; action?: string; limit?: number }) =>
     request<{ logs: OperationAuditLog[] }>(`/api/audit/operations${buildQuery(params ?? {})}`, { headers: { "X-Admin-Key": adminKeyHeader() } }),
+  operationAuditExportUrl: (params?: { actor?: string; action?: string; limit?: number }) =>
+    `${API_BASE}/api/audit/operations/export${buildQuery(params ?? {})}`,
   priceVersions: (params?: { item_id?: string; region_id?: string; status?: string }) =>
     request<{ price_versions: PriceVersion[] }>(`/api/price-versions${buildQuery(params ?? {})}`),
   createPriceVersion: (input: PriceVersionInput) =>

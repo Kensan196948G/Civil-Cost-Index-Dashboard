@@ -112,6 +112,8 @@ describe.skipIf(!hasDb)("integration smoke", () => {
       "/api/export/xlsx?data_type=MATERIAL_PRICE",
       "/api/export/pdf?data_type=MATERIAL_PRICE",
       "/api/export/pptx?data_type=MATERIAL_PRICE",
+      "/api/audit/operations",
+      "/api/audit/operations/export",
       "/api/ai/status",
       "/api/ai/templates",
       "/api/reports/management.json",
@@ -281,6 +283,49 @@ describe.skipIf(!hasDb)("integration smoke", () => {
     const text = new TextDecoder("utf-8").decode(bytes);
     expect(text).toContain("年月");
     expect(text).toContain("H形鋼");
+  });
+
+  it("audit operations CSV export", async () => {
+    const admin = { "X-Admin-Key": process.env.ADMIN_API_KEY! };
+    const res = await app!.fetch(
+      new Request("http://localhost/api/audit/operations/export?limit=5", { headers: admin }),
+      env
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/csv");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("x-export-limit")).toBe("5");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect([bytes[0], bytes[1], bytes[2]]).toEqual([0xef, 0xbb, 0xbf]);
+    const text = new TextDecoder("utf-8").decode(bytes);
+    expect(text).toContain("日時(JST)");
+    expect(text).toContain("監査ID");
+    expect(text).not.toContain("IPアドレス");
+
+    const bad = await app!.fetch(
+      new Request("http://localhost/api/audit/operations/export?limit=0", { headers: admin }),
+      env
+    );
+    expect(bad.status).toBe(400);
+    const badBody = (await bad.json()) as { error: { code: string } };
+    expect(badBody.error.code).toBe("VALIDATION_ERROR");
+
+    // エクスポート実行自体が監査ログに記録される
+    const logs = await get("/api/audit/operations?action=audit.export&limit=5", { headers: admin });
+    expect(logs.status).toBe(200);
+    expect(logs.body.data.logs.length).toBeGreaterThan(0);
+  });
+
+  it("audit CSV export rejects a viewer role", async () => {
+    // 認証済みでも auditor / system_admin 以外は403（匿名は401）。
+    const trustEnv = { ...env, AUTH_TRUST_PROXY: "true" };
+    const res = await app!.fetch(
+      new Request("http://localhost/api/audit/operations/export", {
+        headers: { "X-User-Email": "viewer@example.com", "X-User-Roles": "viewer" },
+      }),
+      trustEnv
+    );
+    expect(res.status).toBe(403);
   });
 
   it("xlsx export", async () => {

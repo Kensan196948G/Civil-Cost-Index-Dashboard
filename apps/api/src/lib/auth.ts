@@ -137,6 +137,20 @@ export async function resolveIdentity(
   c: AuthContext,
   sql: Sql
 ): Promise<Identity> {
+  // X-Admin-Key（管理者）を最優先で判定する。
+  // Basic認証（LAN全体ゲート）より先に評価しないと、Basic資格情報を自動送信するブラウザ/curlでは
+  // X-Admin-Keyを入力してもBasic(viewer)が先にマッチして管理APIが常に403 FORBIDDENになる
+  // （READMEの仕様: X-Admin-Keyは「どの環境からでも管理APIを操作できる」管理者認証）。
+  const adminKey = c.req.header("X-Admin-Key") ?? "";
+  if (adminKey && timingSafeEqualStrings(adminKey, (c.env.ADMIN_API_KEY ?? "").trim())) {
+    return {
+      email: "admin-key",
+      display_name: "システム管理者（Admin Key）",
+      roles: [...ALL_ROLES],
+      source: "admin-key",
+    };
+  }
+
   // Basic認証（LAN全体ゲート）: 認証通過者は閲覧者(viewer)として扱う。
   // 管理操作は X-Admin-Key / Cloudflare Access のRBACが別途要求する。
   const basic = c.req.header("Authorization") ?? "";
@@ -151,16 +165,6 @@ export async function resolveIdentity(
         source: "basic-auth",
       };
     }
-  }
-
-  const adminKey = c.req.header("X-Admin-Key") ?? "";
-  if (adminKey && timingSafeEqualStrings(adminKey, (c.env.ADMIN_API_KEY ?? "").trim())) {
-    return {
-      email: "admin-key",
-      display_name: "システム管理者（Admin Key）",
-      roles: [...ALL_ROLES],
-      source: "admin-key",
-    };
   }
 
   if (c.env.AUTH_TRUST_PROXY === "true") {

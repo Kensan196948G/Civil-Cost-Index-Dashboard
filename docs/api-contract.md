@@ -142,6 +142,7 @@ AI候補（数量・歩掛・査定・図面OCR）の生成時は Teams/Slack �
 | POST | `/api/users` | ユーザー作成（system_admin） |
 | PATCH | `/api/users/{id}` | ユーザー更新・役割変更（system_admin） |
 | GET | `/api/audit/operations` | 操作監査ログ（auditor / system_admin） |
+| GET | `/api/audit/operations/export` | 操作監査ログのCSVエクスポート（auditor / system_admin） |
 | GET | `/api/price-versions` | 単価版一覧 |
 | POST | `/api/price-versions` | 単価版（下書き）作成 |
 | PATCH | `/api/price-versions/{id}` | 単価版更新（下書きのみ） |
@@ -301,6 +302,35 @@ CSV accepted columns (flexible, Japanese/English headers): 年月/period, 品目
 ## GET /api/export/csv
 
 Query: same as `/api/timeseries`. Returns `text/csv; charset=utf-8` with UTF-8 BOM and Japanese column names: 年月, データ分類, 品目, 地域, 値, 単位, 前月比, 前年比, 状態, 出典, 取得日時.
+
+## GET /api/audit/operations/export
+
+操作監査ログ（`operation_audit_logs`）を CSV で返します。`auditor` / `system_admin` のみ。
+
+Query:
+- `actor`（任意）: 操作者メールの完全一致
+- `action`（任意）: 操作種別の完全一致（例 `user.create`）
+- `from` / `to`（任意）: 期間。`from` は含む、`to` は含まない（排他）。ISO 8601。
+  日付のみ（`YYYY-MM-DD`）は画面表示と同じ **Asia/Tokyo 00:00:00** として解釈する（DBセッションTZに依存しない）。
+  日時を指定する場合はタイムゾーンオフセット（`Z` / `+09:00`）を必須とする。
+- `limit`（任意）: 1〜5000、既定 5000
+
+Response: `text/csv; charset=utf-8`（UTF-8 BOM・CRLF）。列は
+`日時(JST), 操作者, 役割, 操作, 対象種別, 対象ID, 詳細, 監査ID`。
+日時は JST の `YYYY-MM-DD HH:MM:SS`。`ip_address` は現行の `recordAudit` が記録しないため列に含めない。
+
+Headers:
+- `Content-Disposition: attachment; filename="cci-audit-operations-YYYY-MM-DD.csv"`
+- `Cache-Control: no-store`（メールアドレス・操作詳細を含むため共有キャッシュへ残さない）
+- `Vary: X-Admin-Key`
+- `X-Export-Row-Count` / `X-Export-Limit` / `X-Export-Truncated`（`true` は上限到達＝他に該当行がある可能性）
+
+Notes:
+- エクスポート実行自体を操作監査ログ `action=audit.export`（`detail` に条件・行数・request_id）として記録する。
+- CSVインジェクション対策として、`=`・`+`・`-`・`@`・タブ・改行で始まる**文字列**セルの先頭に `'` を付与する
+  （`-0.1` 等の数値表現は対象外）。
+- 監査ログテーブル自体には改ざん防止トリガー・ハッシュ連鎖は無い。本エクスポートは台帳の抜粋であり、
+  DB管理者による変更に対する暗号学的保証は提供しない。
 
 ## GET /api/export/xlsx
 
